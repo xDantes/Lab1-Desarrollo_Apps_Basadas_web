@@ -1,27 +1,42 @@
-name: CI
+# ============================================================
+#  Integración Continua (CI) con GitHub Actions
+#  Qué hace: cada vez que hacés "push", GitHub compila el
+#  proyecto y corre las pruebas automáticamente, en un
+#  servidor limpio. Si algo se rompe, te avisa.
+# ============================================================
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+name: CI                      # Nombre que verás en la pestaña "Actions" de GitHub
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+on:                           # ¿CUÁNDO se ejecuta este workflow?
+  push:                       #   - cada vez que subís commits (push)
+    branches: [ main ]        #     a la rama main
+  pull_request:               #   - y cuando abrís un pull request
+    branches: [ main ]
 
-    steps:
-      - name: Checkout codigo
+jobs:                         # Un workflow tiene uno o más "jobs" (trabajos)
+  build:                      # Nuestro job se llama "build"
+    runs-on: ubuntu-latest    # Se ejecuta en una máquina Linux limpia que GitHub presta
+
+    steps:                    # Los pasos que ejecuta, en orden:
+
+      # Paso 1: descargar tu código al servidor de GitHub
+      - name: Descargar el código
         uses: actions/checkout@v4
 
-      - name: Configurar JDK 21
+      # Paso 2: instalar Java 21 (Temurin es una distribución gratuita)
+      - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
           distribution: 'temurin'
+          java-version: '21'
+          cache: gradle       # Guarda dependencias para que la próxima vez sea más rápido
 
-      - name: Dar permisos de ejecucion a gradlew
+      # Paso 3: dar permiso de ejecución al script de Gradle (necesario en Linux)
+      - name: Dar permisos a gradlew
         run: chmod +x ./gradlew
 
-      - name: Compilar y probar con Gradle
+      # Paso 4: compilar y correr las pruebas
+      #   "./gradlew build" compila, empaqueta y ejecuta los tests.
+      #   Si algo falla, el workflow se marca en ROJO. Si todo pasa, en VERDE.
+      - name: Compilar y probar
         run: ./gradlew build
