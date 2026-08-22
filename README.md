@@ -82,7 +82,7 @@ El proyecto sigue una separación por capas bajo `cr.ac.una.lab1`:
 
 - `presentation` — controladores REST (ej. `CursoController`).
 - `business` — reglas de negocio y DTOs de salida (ej. `CursoService`, `CursoCatalogoDTO`).
-- `data` — entidades JPA y repositorios (ej. `Curso`, `CursoRepository`).
+- `data` — entidades JPA y repositorios de PostgreSQL (`Usuario`, `Curso`, `Leccion`, `Matricula`, `Pago`), y en    `data.mongo` los documentos/repositorios de MongoDB (`SenaLesco`, `RecursoMultimedia`, `Comentario`).
 - `config` — configuración transversal de la aplicación.
 
 ## Persistencia
@@ -90,8 +90,11 @@ El proyecto sigue una separación por capas bajo `cr.ac.una.lab1`:
 - PostgreSQL: usuarios, cursos, lecciones, matrículas y pagos. Esquema versionado
   con [Flyway](src/main/resources/db/migration) (3FN, con CHECK/UNIQUE/FK e índices
   justificados en cada migración).
-- MongoDB: diccionario de señas LESCO, recursos multimedia de lecciones y
-  comentarios de cursos — en progreso (ver `mongo-init/`).
+- MongoDB: 3 colecciones creadas por [mongo-init](mongo-init/) al primer arranque
+  (validador `$jsonSchema` + índices + datos semilla en cada una):
+  - `sena_lesco` — diccionario de señas, con `categoria` y `multimedia` **embebidas**.
+  - `recursos_multimedia` — videos/imágenes de lecciones, **referenciando** `leccionId`/`cursoId` de PostgreSQL.
+  - `comentarios` — comentarios de cursos, **referenciando** `cursoId`/`usuarioId`, con `respuestas` **embebidas**.
 
 ## Notas adicionales
 

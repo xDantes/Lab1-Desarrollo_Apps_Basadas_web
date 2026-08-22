@@ -10,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 
-/** Cuenta base del sistema (login). Mapea la tabla `usuario` (ver V1__crear_usuario.sql). */
 @Entity
 @Table(name = "usuario")
 public class Usuario {

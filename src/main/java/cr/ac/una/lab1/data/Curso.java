@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
-/** Unidad matriculable. Mapea la tabla `curso` (ver V2__crear_curso.sql). */
 @Entity
 @Table(name = "curso")
 public class Curso {
