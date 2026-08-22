@@ -1,42 +1,42 @@
-# ============================================================
-#  Integración Continua (CI) con GitHub Actions
-#  Qué hace: cada vez que hacés "push", GitHub compila el
-#  proyecto y corre las pruebas automáticamente, en un
-#  servidor limpio. Si algo se rompe, te avisa.
-# ============================================================
+name: CI                      
 
-name: CI                      # Nombre que verás en la pestaña "Actions" de GitHub
-
-on:                           # ¿CUÁNDO se ejecuta este workflow?
-  push:                       #   - cada vez que subís commits (push)
-    branches: [ main ]        #     a la rama main
-  pull_request:               #   - y cuando abrís un pull request
+on:                           
+  push:                       
+    branches: [ main ]       
+  pull_request:              
     branches: [ main ]
 
-jobs:                         # Un workflow tiene uno o más "jobs" (trabajos)
-  build:                      # Nuestro job se llama "build"
-    runs-on: ubuntu-latest    # Se ejecuta en una máquina Linux limpia que GitHub presta
+jobs:                        
+  build:  
+    runs-on: ubuntu-latest  
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lescocr
+          POSTGRES_USER: lescocr
+          POSTGRES_PASSWORD: lescocr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U lescocr -d lescocr"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
 
-    steps:                    # Los pasos que ejecuta, en orden:
-
-      # Paso 1: descargar tu código al servidor de GitHub
+    steps:                 
       - name: Descargar el código
         uses: actions/checkout@v4
 
-      # Paso 2: instalar Java 21 (Temurin es una distribución gratuita)
       - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: gradle       # Guarda dependencias para que la próxima vez sea más rápido
+          cache: gradle     
 
-      # Paso 3: dar permiso de ejecución al script de Gradle (necesario en Linux)
       - name: Dar permisos a gradlew
         run: chmod +x ./gradlew
 
-      # Paso 4: compilar y correr las pruebas
-      #   "./gradlew build" compila, empaqueta y ejecuta los tests.
-      #   Si algo falla, el workflow se marca en ROJO. Si todo pasa, en VERDE.
       - name: Compilar y probar
         run: ./gradlew build
