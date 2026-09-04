@@ -31,7 +31,7 @@ public class Leccion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id", nullable = false)
-    private Usuario instructor;
+    private Instructor instructor;
 
     @Column(name = "creado_en", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime creadoEn;
@@ -56,7 +56,7 @@ public class Leccion {
         return curso;
     }
 
-    public Usuario getInstructor() {
+    public Instructor getInstructor() {
         return instructor;
     }
 

@@ -12,9 +12,9 @@ Desarrollado por: Derrek Adrián Ureña Solís y José Arrieta Sancho.
 ## Documentación del proyecto
 
 - [Propuesta de dominio](docs/Propuesta_de_Dominio.pdf) — entidades de negocio, procesos y alcance.
-- [Diagrama de arquitectura previsto](docs/diagrama.md)
-- [Diagrama de arquitectura actual](docs/diagrama_actual.md) 
+- [Diagrama de arquitectura](docs/diagrama.md)
 - [ADR-001 · Elección de stack](docs/adr/ADR-001-EleccionStack.md)
+- [Modelo de datos](docs/modelo-datos.md) — tablas, restricciones e índices justificados; colecciones Mongo con su justificación de embeber/referenciar.
 
 ## Requisitos previos
 

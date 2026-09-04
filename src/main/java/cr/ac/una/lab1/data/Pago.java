@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
+/** Registro del pago de una matrícula (1:1). Mapea la tabla `pago` (ver V7__crear_pago.sql). */
 @Entity
 @Table(name = "pago")
 public class Pago {
@@ -29,8 +30,12 @@ public class Pago {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal monto;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private String metodo;
+    private MetodoPago metodo;
+
+    @Column(length = 50)
+    private String referencia;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -38,6 +43,10 @@ public class Pago {
 
     @Column(nullable = false, insertable = false, updatable = false)
     private OffsetDateTime fecha;
+
+    // La actualiza el trigger trg_pago_actualizado_en (V7); Hibernate solo la lee.
+    @Column(name = "actualizado_en", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime actualizadoEn;
 
     protected Pago() {
         // requerido por JPA
@@ -55,8 +64,12 @@ public class Pago {
         return monto;
     }
 
-    public String getMetodo() {
+    public MetodoPago getMetodo() {
         return metodo;
+    }
+
+    public String getReferencia() {
+        return referencia;
     }
 
     public EstadoPago getEstado() {
@@ -65,5 +78,9 @@ public class Pago {
 
     public OffsetDateTime getFecha() {
         return fecha;
+    }
+
+    public OffsetDateTime getActualizadoEn() {
+        return actualizadoEn;
     }
 }
