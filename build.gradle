@@ -7,6 +7,8 @@ plugins {
 group = 'cr.ac.una'
 version = '0.0.1-SNAPSHOT'
 
+ext['testcontainers.version'] = '1.20.4'
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
@@ -39,4 +41,8 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	testLogging {
+		events "passed", "skipped", "failed"
+		exceptionFormat "full"
+	}
 }
