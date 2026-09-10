@@ -86,6 +86,8 @@ Las pruebas de integración levantan contenedores reales de **PostgreSQL 16** y 
 # En Windows (PowerShell / CMD)
 .\gradlew.bat test
 
+.\gradlew.bat test --rerun
+
 # En Linux / macOS
 ./gradlew test
 ```
