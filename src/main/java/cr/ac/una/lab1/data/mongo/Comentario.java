@@ -20,8 +20,18 @@ public class Comentario {
     private boolean editado;
     private List<RespuestaComentario> respuestas;
 
-    protected Comentario() {
+    public Comentario() {
         // requerido por el conversor de Spring Data MongoDB
+    }
+
+    public Comentario(Long cursoId, Long usuarioId, String autorNombre, String texto, Integer calificacion) {
+        this.cursoId = cursoId;
+        this.usuarioId = usuarioId;
+        this.autorNombre = autorNombre;
+        this.texto = texto;
+        this.calificacion = calificacion;
+        this.creadoEn = Instant.now();
+        this.editado = false;
     }
 
     public String getId() {

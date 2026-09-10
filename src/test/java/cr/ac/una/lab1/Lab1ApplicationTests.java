@@ -1,13 +1,12 @@
 package cr.ac.una.lab1;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.junit.jupiter.api.condition.EnabledIf;
 
-@SpringBootTest
-class Lab1ApplicationTests {
+@EnabledIf("cr.ac.una.lab1.DockerUtils#isDockerAvailable")
+class Lab1ApplicationTests extends AbstractIntegrationTest {
 
-	@Test
-	void contextLoads() {
-	}
-
+    @Test
+    void contextLoads() {
+    }
 }

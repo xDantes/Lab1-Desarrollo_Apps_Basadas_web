@@ -41,6 +41,14 @@ public class Usuario {
         // requerido por JPA
     }
 
+    public Usuario(String nombre, String identificacion, String correo, String contrasenaHash, RolUsuario rol) {
+        this.nombre = nombre;
+        this.identificacion = identificacion;
+        this.correo = correo;
+        this.contrasenaHash = contrasenaHash;
+        this.rol = rol;
+    }
+
     public Long getId() {
         return id;
     }

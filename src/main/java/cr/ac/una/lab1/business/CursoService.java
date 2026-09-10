@@ -18,9 +18,11 @@ import org.springframework.stereotype.Service;
 public class CursoService {
 
     private final CursoRepository cursoRepository;
+    private final cr.ac.una.lab1.data.MatriculaRepository matriculaRepository;
 
-    public CursoService(CursoRepository cursoRepository) {
+    public CursoService(CursoRepository cursoRepository, cr.ac.una.lab1.data.MatriculaRepository matriculaRepository) {
         this.cursoRepository = cursoRepository;
+        this.matriculaRepository = matriculaRepository;
     }
 
     public List<CursoCatalogoDTO> listarCatalogoPublico() {
@@ -30,9 +32,11 @@ public class CursoService {
     }
 
     private CursoCatalogoDTO aCatalogoDTO(Curso curso) {
-        // TODO: una vez exista la tabla/entidad `matricula`, restar aquí las
-        // matrículas activas del curso en vez de exponer el cupo total.
-        int cuposDisponibles = curso.getCupoTotal();
+        int matriculasActivas = matriculaRepository.findByCursoIdAndEstado(
+                curso.getId(),
+                cr.ac.una.lab1.data.EstadoMatricula.ACTIVA
+        ).size();
+        int cuposDisponibles = Math.max(0, curso.getCupoTotal() - matriculasActivas);
         BigDecimal precioFinal = precioConDescuento(curso.getPrecio(), curso.getDescuentoPorcentaje());
         return new CursoCatalogoDTO(
                 curso.getId(),

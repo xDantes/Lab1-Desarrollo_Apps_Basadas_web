@@ -47,8 +47,20 @@ public class Matricula {
     @Column(nullable = false, insertable = false, updatable = false)
     private OffsetDateTime fecha;
 
+    @jakarta.persistence.OneToOne(mappedBy = "matricula", fetch = FetchType.LAZY)
+    private Pago pago;
+
     protected Matricula() {
         // requerido por JPA
+    }
+
+    public Matricula(String consecutivo, Usuario usuario, Leccion leccion, EstadoMatricula estado, BigDecimal precioFinal) {
+        this.consecutivo = consecutivo;
+        this.usuario = usuario;
+        this.leccion = leccion;
+        this.curso = leccion != null ? leccion.getCurso() : null;
+        this.estado = estado;
+        this.precioFinal = precioFinal;
     }
 
     public Long getId() {
@@ -81,5 +93,9 @@ public class Matricula {
 
     public OffsetDateTime getFecha() {
         return fecha;
+    }
+
+    public Pago getPago() {
+        return pago;
     }
 }
