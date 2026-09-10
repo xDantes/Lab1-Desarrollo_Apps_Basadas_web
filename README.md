@@ -1,30 +1,80 @@
 # LescoCR
 
-Plataforma de apoyo a la enseñanza de LESCO (Lengua de Señas Costarricense), dirigida a la comunidad LESCO y a cualquier persona interesada en aprenderla gratis. Ofrece un diccionario de señas con búsqueda por imágenes/video, y cursos estructurados en lecciones con matrícula y pago (simulado).
+Plataforma de apoyo a la enseñanza de LESCO (Lengua de Señas Costarricense), dirigida
+a la comunidad LESCO y a cualquier persona interesada en aprenderla gratis. ofrece un
+diccionario de señas con búsqueda por imágenes/video, y cursos estructurados en
+lecciones con matrícula y pago (simulado).
 
 Proyecto de EIF509 Desarrollo de Aplicaciones Basadas en Web.
 
 Desarrollado por: Derrek Adrián Ureña Solís y José Arrieta Sancho.
 
----
-
 ## Documentación del proyecto
 
 - [Propuesta de dominio](docs/Propuesta_de_Dominio.pdf) — entidades de negocio, procesos y alcance.
-- [Diagrama de arquitectura](docs/diagrama.md) — diagrama Mermaid actualizado con generalización de repositorios y specifications.
+- [Diagrama de arquitectura previsto](docs/diagrama.md)
+- [Diagrama de arquitectura actual](docs/diagrama_actual.md) 
 - [ADR-001 · Elección de stack](docs/adr/ADR-001-EleccionStack.md)
-- [Modelo de datos](docs/modelo-datos.md) — tablas, restricciones e índices justificados; colecciones Mongo con su justificación de embeber/referenciar.
-
----
 
 ## Requisitos previos
 
 - **Java 21** (JDK)
-- **Docker** y **Docker Compose** — para levantar PostgreSQL y MongoDB (o para ejecución de Testcontainers).
-  - En Windows: WSL2 (`wsl --install` desde PowerShell como Administrador, reiniciar) y [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-- El proyecto incluye el wrapper de Gradle (`gradlew` / `gradlew.bat`), por lo que no es necesario instalar Gradle por separado.
+- **Docker** y **Docker Compose** — para levantar PostgreSQL y MongoDB. 
+  Si no los tenés instalados en Windows: instalar WSL2 (`wsl --install` desde una PowerShell
+  como Administrador, reiniciar) y luego [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
----
+No hace falta instalar Gradle: el proyecto trae `gradlew` / `gradlew.bat`.
+
+## Cómo clonarlo y levantarlo
+
+```bash
+git clone https://github.com/xDantes/Lab1-Desarrollo_Apps_Basadas_web.git
+cd Lab1-Desarrollo_Apps_Basadas_web
+```
+
+1. Levantar las bases de datos (PostgreSQL + MongoDB):
+
+```bash
+docker compose up -d
+```
+
+2. Compilar y correr las pruebas (la app necesita Postgres arriba para este paso,
+porque las pruebas levantan el contexto de Spring con JPA + Flyway ya conectados):
+
+```bash
+./gradlew build
+```
+
+3. Levantarla:
+
+```bash
+./gradlew bootRun
+```
+
+Queda en **http://localhost:8080**.
+
+## Comprobar que funciona
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+```json
+{"status":"UP"}
+```
+
+```bash
+curl http://localhost:8080/api/cursos
+```
+```json
+[
+  {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":20,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
+  {"id":2,"codigo":"LESCO-102","nombre":"LESCO Intermedio","nivel":"INTERMEDIO","precioFinal":49500.00,"cupoTotal":15,"cuposDisponibles":15,"fechaInicio":"2026-09-07","fechaFin":"2026-12-04"}
+]
+```
+
+Ese resultado viene de los datos semilla de Flyway (`src/main/resources/db/migration`) y
+solo muestra los cursos **publicados** — hay un tercer curso de ejemplo (`LESCO-201`) que
+no aparece a propósito, porque todavía no está publicado.
 
 ## Cómo Ejecutar las Pruebas de Integración con Testcontainers
 
@@ -38,11 +88,6 @@ Las pruebas de integración levantan contenedores reales de **PostgreSQL 16** y 
 
 # En Linux / macOS
 ./gradlew test
-```
-
-Para correr una clase de prueba específica o ver el log detallado:
-```bash
-.\gradlew.bat test --tests "cr.ac.una.lab1.PersistenciaIntegrationTest" --info
 ```
 
 ### Qué se espera ver como resultado:
@@ -61,24 +106,37 @@ Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositor
    - `test7_RepositorioGenericoBaseJPA`: Prueba operaciones genéricas de `BaseRepository` (CRUD, paginación, sort).
    - `test8_RepositorioGenericoBaseMongoDB`: Prueba operaciones genéricas de `BaseMongoRepository` sobre MongoDB.
 
-Salida esperada en consola:
-```text
-> Task :test
-PersistenciaIntegrationTest > Prueba 1: Validar esquema Flyway y persistencia de entidades JPA (ddl-auto=validate) PASSED
-PersistenciaIntegrationTest > Prueba 2: Demostración del problema N+1 y corrección con JOIN FETCH y @EntityGraph PASSED
-PersistenciaIntegrationTest > Prueba 3: Consulta de Negocio 1 (JPQL) - Cursos publicados con lecciones PASSED
-PersistenciaIntegrationTest > Prueba 4: Consulta de Negocio 2 (JPQL) - Matrículas por estudiante con grafo completo PASSED
-PersistenciaIntegrationTest > Prueba 5: Consulta de Negocio 3 (Criteria / Specification) - Filtrado dinámico de Cursos PASSED
-PersistenciaIntegrationTest > Prueba 6: Consulta de Negocio 4 (Criteria / Specification) - Filtrado dinámico de Matrículas PASSED
-PersistenciaIntegrationTest > Prueba 7: Repositorio Genérico Base JPA (BaseRepository CRUD, paginación, ordenamiento) PASSED
-PersistenciaIntegrationTest > Prueba 8: Repositorio Genérico Base MongoDB (BaseMongoRepository con subdominio NoSQL) PASSED
-
-BUILD SUCCESSFUL in 15s
-```
-
 El reporte HTML completo se genera en: `build/reports/tests/test/index.html`.
 
 ---
+
+## Arquitectura del código
+
+El proyecto sigue una separación por capas bajo `cr.ac.una.lab1`:
+
+- `presentation` — controladores REST (ej. `CursoController`).
+- `business` — reglas de negocio y DTOs de salida (ej. `CursoService`, `CursoCatalogoDTO`).
+- `data` — entidades JPA y repositorios de PostgreSQL (`Usuario`, `Curso`, `Leccion`, `Matricula`, `Pago`), y en    `data.mongo` los documentos/repositorios de MongoDB (`SenaLesco`, `RecursoMultimedia`, `Comentario`).
+- `config` — configuración transversal de la aplicación.
+
+## Persistencia
+
+- PostgreSQL: usuarios, cursos, lecciones, matrículas y pagos. Esquema versionado
+  con [Flyway](src/main/resources/db/migration) (3FN, con CHECK/UNIQUE/FK e índices
+  justificados en cada migración).
+- MongoDB: 3 colecciones creadas por [mongo-init](mongo-init/) al primer arranque
+  (validador `$jsonSchema` + índices + datos semilla en cada una):
+  - `sena_lesco` — diccionario de señas, con `categoria` y `multimedia` **embebidas**.
+  - `recursos_multimedia` — videos/imágenes de lecciones, **referenciando** `leccionId`/`cursoId` de PostgreSQL.
+  - `comentarios` — comentarios de cursos, **referenciando** `cursoId`/`usuarioId`, con `respuestas` **embebidas**.
+
+## Notas adicionales
+
+- Los comentarios no eran parte de la propuesta inicial, se implemento para hacer mas amplio el modelo de base de datos y dividir mejor el uso de base de datos para equilibrar su uso y que sea mas amplio su uso y aprendizaje. 
+
+- A la hora de crear la propuesta inicial, cometimos algunos errores en la redaccion con respecto a la relacion del profesor con el curso o leccion, fuimos algo ambiguos, dado que, el plan real es que el profesor esta asociado a la leccion, y de la misma forma el profesor adjunte el material a la leccion y no directamente al curso.
+
+- Tras un analisis, decidimos hacer algunos cambios con el modelado de las tablas, para re distribuir tal como ya se agrego a este documento.
 
 ## Arquitectura de Persistencia y Repositorios
 
@@ -283,22 +341,3 @@ ORDER BY c.fecha_inicio ASC;
   ```
 
 ---
-
-## Cómo Levantar la Aplicación en Desarrollo
-
-1. Levantar las bases de datos locales:
-   ```bash
-   docker compose up -d
-   ```
-
-2. Ejecutar la aplicación:
-   ```bash
-   ./gradlew bootRun
-   ```
-   La aplicación estará disponible en **http://localhost:8080**.
-
-3. Probar endpoints:
-   ```bash
-   curl http://localhost:8080/actuator/health
-   curl http://localhost:8080/api/cursos
-   ```
