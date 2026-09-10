@@ -1,10 +1,10 @@
 package cr.ac.una.lab1.data.mongo;
 
+import cr.ac.una.lab1.data.mongo.base.BaseMongoRepository;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.mongodb.repository.MongoRepository;
 
-public interface SenaLescoRepository extends MongoRepository<SenaLesco, String> {
+public interface SenaLescoRepository extends BaseMongoRepository<SenaLesco, String> {
 
     Optional<SenaLesco> findByPalabraNormalizada(String palabraNormalizada);
 

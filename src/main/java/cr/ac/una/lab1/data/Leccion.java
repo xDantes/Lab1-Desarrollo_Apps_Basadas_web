@@ -31,13 +31,20 @@ public class Leccion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id", nullable = false)
-    private Usuario instructor;
+    private Instructor instructor;
 
     @Column(name = "creado_en", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime creadoEn;
 
     protected Leccion() {
         // requerido por JPA
+    }
+
+    public Leccion(String titulo, int orden, Curso curso, Instructor instructor) {
+        this.titulo = titulo;
+        this.orden = orden;
+        this.curso = curso;
+        this.instructor = instructor;
     }
 
     public Long getId() {
@@ -56,7 +63,7 @@ public class Leccion {
         return curso;
     }
 
-    public Usuario getInstructor() {
+    public Instructor getInstructor() {
         return instructor;
     }
 

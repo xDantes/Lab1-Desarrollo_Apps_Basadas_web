@@ -18,8 +18,17 @@ public class RecursoMultimedia {
 
     private Map<String, Object> metadata;
 
-    protected RecursoMultimedia() {
+    public RecursoMultimedia() {
         // requerido por el conversor de Spring Data MongoDB
+    }
+
+    public RecursoMultimedia(Long leccionId, Long cursoId, TipoMultimedia tipo, String url, int orden, Map<String, Object> metadata) {
+        this.leccionId = leccionId;
+        this.cursoId = cursoId;
+        this.tipo = tipo;
+        this.url = url;
+        this.orden = orden;
+        this.metadata = metadata;
     }
 
     public String getId() {

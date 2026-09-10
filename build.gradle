@@ -7,6 +7,8 @@ plugins {
 group = 'cr.ac.una'
 version = '0.0.1-SNAPSHOT'
 
+ext['testcontainers.version'] = '1.20.4'
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
@@ -31,8 +33,16 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:junit-jupiter'
+	testImplementation 'org.testcontainers:postgresql'
+	testImplementation 'org.testcontainers:mongodb'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+	testLogging {
+		events "passed", "skipped", "failed"
+		exceptionFormat "full"
+	}
 }

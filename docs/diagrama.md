@@ -40,47 +40,63 @@ graph TD
 
     %% CAPA DE PERSISTENCIA
     subgraph Persistencia["CAPA DE PERSISTENCIA"]
-        subgraph JPA["Spring Data JPA"]
+        subgraph JPA["Spring Data JPA (Generalización BaseRepository)"]
+            BR["BaseRepository&lt;T, ID&gt;<br/><i>(JpaRepository + JpaSpecificationExecutor)</i>"]:::entregado
+            UR["UsuarioRepository"]:::entregado
+            IR["InstructorRepository"]:::entregado
             CR["CursoRepository"]:::entregado
             LR["LeccionRepository"]:::entregado
             MR["MatriculaRepository"]:::entregado
             PR["PagoRepository"]:::entregado
-            UR["UsuarioRepository <i>[Pendiente]</i>"]:::pendiente
+            CSPEC["CursoSpecification & MatriculaSpecification<br/><i>(Criteria API Dinámica)</i>"]:::entregado
+
+            UR --> BR
+            IR --> BR
+            CR --> BR
+            LR --> BR
+            MR --> BR
+            PR --> BR
         end
 
-        subgraph Mongo["MongoDB Repositories"]
+        subgraph Mongo["MongoDB Repositories (Generalización BaseMongoRepository)"]
+            BMR["BaseMongoRepository&lt;T, ID&gt;<br/><i>(MongoRepository)</i>"]:::entregado
             SLR["SenaLescoRepository"]:::entregado
             CMR["ComentarioRepository"]:::entregado
             RMR["RecursoMultimediaRepository"]:::entregado
+
+            SLR --> BMR
+            CMR --> BMR
+            RMR --> BMR
         end
     end
 
     %% CAPA DE ALMACENAMIENTO
     subgraph Almacenamiento["CAPA DE ALMACENAMIENTO"]
-        BDR[("Base de Datos Relacional<br/>(MySQL / MariaDB / H2)")]:::db
-        BDM[("MongoDB & Archivos")]:::db
+        BDR[("PostgreSQL 16<br/>(Flyway V1..V8 / ddl-auto=validate)")]:::db
+        BDM[("MongoDB 7.0<br/>(Diccionario, Multimedia, Comentarios)")]:::db
     end
 
-    %% RELACIONES ENTREGADAS (Línea Continua)
+    %% RELACIONES ENTREGADAS
     CC --> CS
     CS --> CR
-    CS --> LR
+    CS --> MR
     CR --> BDR
     LR --> BDR
     MR --> BDR
     PR --> BDR
+    UR --> BDR
+    IR --> BDR
     SLR --> BDM
     CMR --> BDM
     RMR --> BDM
 
-    %% RELACIONES PENDIENTES (Línea Punteada)
+    %% RELACIONES PENDIENTES
     AC -.- AS
     MC -.- MS
     MC -.- PS
     DC -.- DS
     ADC -.- CS
     AS -.- UR
-    UR -.- BDR
     MS -.- MR
     PS -.- PR
     RMS -.- RMR

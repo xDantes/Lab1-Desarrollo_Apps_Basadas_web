@@ -22,7 +22,7 @@ INSERT INTO matricula (consecutivo, usuario_id, leccion_id, estado, precio_final
      (SELECT id FROM leccion WHERE curso_id = (SELECT id FROM curso WHERE codigo = 'LESCO-101') AND orden = 2),
      'CANCELADA', 45000.00);
 
-INSERT INTO pago (matricula_id, monto, metodo, estado) VALUES
-    ((SELECT id FROM matricula WHERE consecutivo = 'MAT-2026-000001'), 45000.00, 'SINPE_MOVIL', 'APROBADO'),
-    ((SELECT id FROM matricula WHERE consecutivo = 'MAT-2026-000002'), 49500.00, 'TARJETA', 'PENDIENTE'),
-    ((SELECT id FROM matricula WHERE consecutivo = 'MAT-2026-000003'), 45000.00, 'TARJETA', 'RECHAZADO');
+INSERT INTO pago (matricula_id, monto, metodo, referencia, estado) VALUES
+    ((SELECT id FROM matricula WHERE consecutivo = 'MAT-2026-000001'), 45000.00, 'SINPE_MOVIL', 'SIM-000001', 'APROBADO'),
+    ((SELECT id FROM matricula WHERE consecutivo = 'MAT-2026-000002'), 49500.00, 'TARJETA', NULL, 'PENDIENTE'),
+    ((SELECT id FROM matricula WHERE consecutivo = 'MAT-2026-000003'), 45000.00, 'TARJETA', 'SIM-000003', 'RECHAZADO');

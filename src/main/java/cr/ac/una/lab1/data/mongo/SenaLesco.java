@@ -17,8 +17,18 @@ public class SenaLesco {
     private List<String> tags;
     private boolean activo;
 
-    protected SenaLesco() {
+    public SenaLesco() {
         // requerido por el conversor de Spring Data MongoDB
+    }
+
+    public SenaLesco(String palabra, String palabraNormalizada, String descripcion, CategoriaSena categoria, List<MultimediaSena> multimedia, List<String> tags, boolean activo) {
+        this.palabra = palabra;
+        this.palabraNormalizada = palabraNormalizada;
+        this.descripcion = descripcion;
+        this.categoria = categoria;
+        this.multimedia = multimedia;
+        this.tags = tags;
+        this.activo = activo;
     }
 
     public String getId() {

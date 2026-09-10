@@ -51,8 +51,26 @@ public class Curso {
     @Column(name = "creado_en", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime creadoEn;
 
+    @jakarta.persistence.OneToMany(mappedBy = "curso", fetch = jakarta.persistence.FetchType.LAZY)
+    private java.util.List<Leccion> lecciones = new java.util.ArrayList<>();
+
     protected Curso() {
         // requerido por JPA
+    }
+
+    public Curso(String codigo, String nombre, String descripcion, String nivel, int cupoTotal,
+                 BigDecimal precio, BigDecimal descuentoPorcentaje, LocalDate fechaInicio,
+                 LocalDate fechaFin, boolean publicado) {
+        this.codigo = codigo;
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+        this.nivel = nivel;
+        this.cupoTotal = cupoTotal;
+        this.precio = precio;
+        this.descuentoPorcentaje = descuentoPorcentaje;
+        this.fechaInicio = fechaInicio;
+        this.fechaFin = fechaFin;
+        this.publicado = publicado;
     }
 
     public Long getId() {
@@ -65,6 +83,10 @@ public class Curso {
 
     public String getNombre() {
         return nombre;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
     }
 
     public String getNivel() {
@@ -94,4 +116,13 @@ public class Curso {
     public boolean isPublicado() {
         return publicado;
     }
+
+    public OffsetDateTime getCreadoEn() {
+        return creadoEn;
+    }
+
+    public java.util.List<Leccion> getLecciones() {
+        return lecciones;
+    }
 }
+
