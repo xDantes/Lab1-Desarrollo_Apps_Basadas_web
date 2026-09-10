@@ -40,6 +40,13 @@ public class Leccion {
         // requerido por JPA
     }
 
+    public Leccion(String titulo, int orden, Curso curso, Instructor instructor) {
+        this.titulo = titulo;
+        this.orden = orden;
+        this.curso = curso;
+        this.instructor = instructor;
+    }
+
     public Long getId() {
         return id;
     }

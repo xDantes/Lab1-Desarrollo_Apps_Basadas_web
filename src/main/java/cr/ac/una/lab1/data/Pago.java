@@ -52,6 +52,14 @@ public class Pago {
         // requerido por JPA
     }
 
+    public Pago(Matricula matricula, BigDecimal monto, MetodoPago metodo, String referencia, EstadoPago estado) {
+        this.matricula = matricula;
+        this.monto = monto;
+        this.metodo = metodo;
+        this.referencia = referencia;
+        this.estado = estado;
+    }
+
     public Long getId() {
         return id;
     }

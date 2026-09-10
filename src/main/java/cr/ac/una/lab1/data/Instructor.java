@@ -43,6 +43,12 @@ public class Instructor {
         // requerido por JPA
     }
 
+    public Instructor(Usuario usuario, String especialidad) {
+        this.usuario = usuario;
+        this.usuarioId = usuario != null ? usuario.getId() : null;
+        this.especialidad = especialidad;
+    }
+
     public Long getUsuarioId() {
         return usuarioId;
     }
