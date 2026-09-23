@@ -29,12 +29,15 @@ import cr.ac.una.lab1.data.mongo.TipoMultimedia;
 import cr.ac.una.lab1.data.specification.CursoSpecification;
 import cr.ac.una.lab1.data.specification.MatriculaSpecification;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -84,6 +87,20 @@ class PersistenciaIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
+
+    // -------------------------------------------------------------------
+    // Helper: devuelve el objeto Statistics de Hibernate y resetea contadores.
+    // -------------------------------------------------------------------
+    private Statistics hibernateStats() {
+        Statistics stats = entityManagerFactory
+                .unwrap(SessionFactory.class)
+                .getStatistics();
+        stats.clear();
+        return stats;
+    }
+
     @Test
     @Order(1)
     @DisplayName("Prueba 1: Validar esquema Flyway y persistencia de entidades JPA (ddl-auto=validate)")
@@ -121,37 +138,70 @@ class PersistenciaIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("Prueba 2: Demostración del problema N+1 y corrección con JOIN FETCH y @EntityGraph")
     @Transactional
     void test2_DemostracionProblemaNMasUnoYCorreccionFetch() {
-        // Limpiar el contexto de persistencia de Hibernate para forzar consultas reales a BD
-        entityManager.flush();
-        entityManager.clear();
+        Statistics stats = hibernateStats();
 
-        // 1. Consulta CORREGIDA con JOIN FETCH (1 sola consulta SQL)
+        // ---------------------------------------------------------------
+        // Variante A: JOIN FETCH — debe emitir exactamente 1 sentencia SQL
+        // ---------------------------------------------------------------
+        entityManager.clear();
+        stats.clear();
+
         List<Curso> cursosConFetch = cursoRepository.findCursosPublicadosConLecciones();
+        long sentenciasJoinFetch = stats.getPrepareStatementCount();
+
         assertThat(cursosConFetch).isNotEmpty();
         for (Curso curso : cursosConFetch) {
-            // Las lecciones ya están cargadas en memoria, no se dispara ninguna consulta adicional
             assertThat(curso.getLecciones()).isNotNull();
             assertThat(curso.isPublicado()).isTrue();
         }
 
-        entityManager.clear();
+        assertThat(sentenciasJoinFetch)
+                .as("JOIN FETCH debe emitir exactamente 1 sentencia SQL (sin N+1)")
+                .isEqualTo(1L);
 
-        // 2. Consulta alternativa con @EntityGraph (1 sola consulta SQL)
+        // ---------------------------------------------------------------
+        // Variante B: @EntityGraph — debe emitir exactamente 1 sentencia SQL
+        // ---------------------------------------------------------------
+        entityManager.clear();
+        stats.clear();
+
         List<Curso> cursosConGraph = cursoRepository.findCursosPublicadosConEntityGraph();
+        long sentenciasEntityGraph = stats.getPrepareStatementCount();
+
         assertThat(cursosConGraph).isNotEmpty();
         for (Curso curso : cursosConGraph) {
             assertThat(curso.getLecciones()).isNotNull();
         }
 
-        entityManager.clear();
+        assertThat(sentenciasEntityGraph)
+                .as("@EntityGraph debe emitir exactamente 1 sentencia SQL (sin N+1)")
+                .isEqualTo(1L);
 
-        // 3. Consulta sin fetch (ejecución perezosa LAZY -> N+1 consultas si se acceden las colecciones)
+        // ---------------------------------------------------------------
+        // Variante C: LAZY sin fetch — DEMUESTRA el problema N+1
+        //   1 sentencia para la lista de cursos publicados +
+        //   N sentencias para las lecciones de cada curso (1 por curso)
+        // ---------------------------------------------------------------
+        entityManager.clear();
+        stats.clear();
+
         List<Curso> cursosSinFetch = cursoRepository.findByPublicadoTrue();
-        assertThat(cursosSinFetch).isNotEmpty();
+        int cantidadCursos = cursosSinFetch.size(); // N cursos publicados en el seed (2: LESCO-101 y LESCO-102)
+
+        // El acceso a getLecciones() dispara 1 SELECT adicional por cada curso → N+1 total.
+        // isNotNull() NO fuerza la carga: solo comprueba que el proxy no sea null,
+        // lo cual es siempre verdadero. Se llama a size() para inicializar el proxy.
         for (Curso curso : cursosSinFetch) {
-            // El acceso a getLecciones() dispararía una consulta SELECT por cada curso (N consultas)
-            assertThat(curso.getLecciones()).isNotNull();
+            @SuppressWarnings("unused")
+            int tam = curso.getLecciones().size(); // fuerza la carga LAZY → 1 SELECT por curso
         }
+
+        long sentenciasLazy = stats.getPrepareStatementCount();
+        long esperadasNMasUno = 1L + cantidadCursos; // 1 (lista) + N (lecciones por curso)
+
+        assertThat(sentenciasLazy)
+                .as("LAZY sin fetch DEBE emitir 1 + %d = %d sentencias SQL (N+1 confirmado)", cantidadCursos, esperadasNMasUno)
+                .isEqualTo(esperadasNMasUno);
     }
 
     @Test
