@@ -188,9 +188,12 @@ class PersistenciaIntegrationTest extends AbstractIntegrationTest {
         List<Curso> cursosSinFetch = cursoRepository.findByPublicadoTrue();
         int cantidadCursos = cursosSinFetch.size(); // N cursos publicados en el seed (2: LESCO-101 y LESCO-102)
 
-        // El acceso a getLecciones() dispara 1 SELECT adicional por cada curso → N+1 total
+        // El acceso a getLecciones() dispara 1 SELECT adicional por cada curso → N+1 total.
+        // isNotNull() NO fuerza la carga: solo comprueba que el proxy no sea null,
+        // lo cual es siempre verdadero. Se llama a size() para inicializar el proxy.
         for (Curso curso : cursosSinFetch) {
-            assertThat(curso.getLecciones()).isNotNull(); // fuerza la carga LAZY
+            @SuppressWarnings("unused")
+            int tam = curso.getLecciones().size(); // fuerza la carga LAZY → 1 SELECT por curso
         }
 
         long sentenciasLazy = stats.getPrepareStatementCount();
