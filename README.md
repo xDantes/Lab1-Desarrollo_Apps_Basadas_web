@@ -13,7 +13,6 @@ Desarrollado por: Derrek Adrián Ureña Solís y José Arrieta Sancho.
 
 - [Propuesta de dominio](docs/Propuesta_de_Dominio.pdf) — entidades de negocio, procesos y alcance.
 - [Diagrama de arquitectura previsto](docs/diagrama.md)
-- [Diagrama de arquitectura actual](docs/diagrama_actual.md) 
 - [ADR-001 · Elección de stack](docs/adr/ADR-001-EleccionStack.md)
 
 ## Requisitos previos
@@ -67,14 +66,16 @@ curl http://localhost:8080/api/cursos
 ```
 ```json
 [
-  {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":20,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
+  {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":19,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
   {"id":2,"codigo":"LESCO-102","nombre":"LESCO Intermedio","nivel":"INTERMEDIO","precioFinal":49500.00,"cupoTotal":15,"cuposDisponibles":15,"fechaInicio":"2026-09-07","fechaFin":"2026-12-04"}
 ]
 ```
 
 Ese resultado viene de los datos semilla de Flyway (`src/main/resources/db/migration`) y
 solo muestra los cursos **publicados** — hay un tercer curso de ejemplo (`LESCO-201`) que
-no aparece a propósito, porque todavía no está publicado.
+no aparece a propósito, porque todavía no está publicado. `cuposDisponibles` de `LESCO-101`
+da 19 (no 20) porque la matrícula semilla `MAT-2026-000001` ya está `ACTIVA` en ese curso
+(ver [Frontera DTO](#frontera-dto--capa-de-negocio-laboratorio-4) más abajo).
 
 ## Cómo Ejecutar las Pruebas de Integración con Testcontainers
 
@@ -343,3 +344,108 @@ ORDER BY c.fecha_inicio ASC;
   ```
 
 ---
+
+## Frontera DTO — Capa de Negocio (Laboratorio 4)
+
+Los dos procesos de negocio (matriculación y publicación de curso) reciben y
+devuelven exclusivamente DTOs (`record`); ninguna entidad JPA (`Curso`,
+`Matricula`, `Usuario`, `Leccion`, `Pago`...) sale del paquete `business` hacia
+`presentation`. El mapeo es manual (sin MapStruct), en un método privado de
+cada servicio. Patrones de diseño usados dentro de estos servicios (State,
+Strategy): ver [docs/patrones.md](docs/patrones.md).
+
+### Proceso 1 — Matriculación de un estudiante
+
+- **Entrada:** [`MatriculaRequestDTO`](src/main/java/cr/ac/una/lab1/business/MatriculaRequestDTO.java)
+  — `record` con Bean Validation (`@NotNull` en `estudianteId`/`cursoId`/`leccionId`/`metodoPago`,
+  `@Size(max = 50)` en `referencia`). El formato de `referencia` (8 dígitos para
+  SINPE, 6-30 caracteres para transferencia, ninguna para tarjeta) **no** se valida
+  con Bean Validation porque depende de otro campo (`metodoPago`): esa validación
+  condicional la hace el patrón Strategy dentro del servicio, no el DTO.
+- **Salida:** [`MatriculaResponseDTO`](src/main/java/cr/ac/una/lab1/business/MatriculaResponseDTO.java)
+  — combina datos de `Matricula`, `Curso`, `Leccion` y `Pago` en un solo `record` plano.
+- **Mapeo:** `MatriculaService.toResponseDTO(Matricula, Curso, Pago)` (privado, manual).
+
+Ejemplo real contra los datos semilla (Diego, `usuarioId=6`, tenía una matrícula
+`CANCELADA` en `LESCO-101` — puede volver a matricularse en ese mismo curso):
+
+```bash
+curl -X POST http://localhost:8080/api/matriculas \
+  -H "Content-Type: application/json" \
+  -d '{"estudianteId":6,"cursoId":1,"leccionId":1,"metodoPago":"TARJETA","referencia":null}'
+```
+```json
+{
+  "matriculaId": 4,
+  "consecutivo": "MAT-2026-000004",
+  "estudianteId": 6,
+  "nombreEstudiante": "Diego Chacón Ureña",
+  "cursoId": 1,
+  "codigoCurso": "LESCO-101",
+  "nombreCurso": "LESCO Básico I",
+  "leccionId": 1,
+  "tituloLeccion": "Alfabeto dactilológico",
+  "estadoMatricula": "PENDIENTE",
+  "precioFinal": 45000.00,
+  "fechaMatricula": "2026-09-24T10:15:00Z",
+  "pagoId": 4,
+  "estadoPago": "PENDIENTE",
+  "metodoPago": "TARJETA"
+}
+```
+
+(`fechaMatricula` la pone la base de datos al insertar — va a mostrar la hora real
+en la que corriste el comando, no la del ejemplo.)
+
+### Proceso 2 — Publicación y habilitación de un curso
+
+- **Entrada:** ninguna. `POST /api/cursos/{id}/publicar` solo recibe el id por
+  *path variable* — no hay payload que validar con Bean Validation porque la
+  acción no necesita datos adicionales del cliente, solo identificar el curso.
+- **Salida:** [`CursoCatalogoDTO`](src/main/java/cr/ac/una/lab1/business/CursoCatalogoDTO.java)
+  — el mismo `record` que ya usa `GET /api/cursos` para el catálogo público
+  (un solo DTO de salida reutilizado en dos endpoints, sin duplicarlo).
+- **Mapeo:** `CursoService.aCatalogoDTO(Curso)` (privado, manual).
+
+Con los datos semilla actuales no hay ningún curso en estado "publicable"
+(`LESCO-101`/`LESCO-102` ya están publicados, `LESCO-201` no tiene lecciones),
+así que en vez de fabricar una publicación exitosa artificial, estos son los
+dos caminos de regla que sí se pueden reproducir tal cual contra la base semilla
+— y que muestran cómo `GlobalExceptionHandler` traduce una `ReglaNegocioException`
+a un 422 con cuerpo JSON, nunca a un stack trace ni a la entidad cruda:
+
+```bash
+curl -i -X POST http://localhost:8080/api/cursos/1/publicar   # LESCO-101, ya publicado
+```
+```json
+{
+  "timestamp": "2026-09-24T10:15:00Z",
+  "status": 422,
+  "error": "Unprocessable Entity",
+  "mensaje": "El curso 'LESCO-101' ya está publicado."
+}
+```
+
+```bash
+curl -i -X POST http://localhost:8080/api/cursos/3/publicar   # LESCO-201, sin lecciones
+```
+```json
+{
+  "timestamp": "2026-09-24T10:15:00Z",
+  "status": 422,
+  "error": "Unprocessable Entity",
+  "mensaje": "No se puede publicar el curso 'LESCO-201' porque no tiene ninguna lección asignada."
+}
+```
+
+### Verificación de que ninguna entidad cruza la frontera
+
+`presentation/CursoController.java` y `presentation/MatriculaController.java`
+solo importan tipos de `cr.ac.una.lab1.business` (los DTOs) y de Spring; ningún
+método público de ningún controlador recibe ni devuelve `Curso`, `Matricula`,
+`Usuario`, `Leccion` ni `Pago`. Comando usado para confirmarlo (sin resultados
+= sin fugas):
+
+```bash
+grep -rn "Curso \|Matricula \|Usuario \|Leccion \|Pago " src/main/java/cr/ac/una/lab1/presentation/
+```
