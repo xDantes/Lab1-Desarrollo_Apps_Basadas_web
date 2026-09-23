@@ -42,6 +42,10 @@ public abstract class AbstractIntegrationTest {
             registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
             registry.add("spring.jpa.open-in-view", () -> "false");
 
+            // Estadísticas de Hibernate: permite contar sentencias SQL preparadas
+            // en las pruebas para verificar el problema N+1 de forma programática.
+            registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
+
             // Configuración dinámica de MongoDB real
             registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
         }

@@ -58,6 +58,11 @@ public class Curso {
         // requerido por JPA
     }
 
+    /** Cambia el estado del curso a publicado. Llamar solo desde {@link cr.ac.una.lab1.business.CursoService#publicarCurso}. */
+    public void publicar() {
+        this.publicado = true;
+    }
+
     public Curso(String codigo, String nombre, String descripcion, String nivel, int cupoTotal,
                  BigDecimal precio, BigDecimal descuentoPorcentaje, LocalDate fechaInicio,
                  LocalDate fechaFin, boolean publicado) {
