@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.3.2'
 	id 'io.spring.dependency-management' version '1.1.6'
+	id 'jacoco'
 }
 
 group = 'cr.ac.una'
@@ -46,4 +47,41 @@ tasks.named('test') {
 		events "passed", "skipped", "failed"
 		exceptionFormat "full"
 	}
+	finalizedBy jacocoTestReport
 }
+
+jacoco {
+	toolVersion = "0.8.12"
+}
+
+def paqueteNegocio = { dirs -> dirs.collect { fileTree(dir: it, include: 'cr/ac/una/lab1/business/**') } }
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+		html.required = true
+	}
+	afterEvaluate {
+		classDirectories.setFrom(files(paqueteNegocio(classDirectories.files)))
+	}
+}
+
+jacocoTestCoverageVerification {
+	dependsOn jacocoTestReport
+	afterEvaluate {
+		classDirectories.setFrom(files(paqueteNegocio(classDirectories.files)))
+	}
+	violationRules {
+		rule {
+			element = 'BUNDLE'
+			limit {
+				counter = 'LINE'
+				value = 'COVEREDRATIO'
+				minimum = 0.70
+			}
+		}
+	}
+}
+
+check.dependsOn jacocoTestCoverageVerification

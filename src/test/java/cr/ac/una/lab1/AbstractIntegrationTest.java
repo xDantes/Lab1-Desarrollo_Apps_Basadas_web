@@ -12,6 +12,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * <p>Inicia contenedores reales de PostgreSQL y MongoDB para ejecutar
  * las migraciones de Flyway, validar el esquema JPA (ddl-auto=validate)
  * y probar repositorios y consultas de negocio contra motores de base de datos reales.
+ *
+ * <p>Arranca los contenedores incondicionalmente: si Docker no está disponible,
+ * Testcontainers lanza su propia excepción (con un mensaje claro de qué falta)
+ * y la prueba queda en rojo. Antes había un guard {@code if (Docker disponible)}
+ * que hacía justo lo contrario — si Docker faltaba, las pruebas quedaban
+ * "skipped" y el build igual reportaba éxito sin haber verificado nada. Eso es
+ * peor que fallar: un CI en verde debe significar que las pruebas corrieron.
  */
 @SpringBootTest
 public abstract class AbstractIntegrationTest {
@@ -24,30 +31,26 @@ public abstract class AbstractIntegrationTest {
     public static final MongoDBContainer mongo = new MongoDBContainer("mongo:7.0");
 
     static {
-        if (DockerUtils.isDockerAvailable()) {
-            postgres.start();
-            mongo.start();
-        }
+        postgres.start();
+        mongo.start();
     }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        if (DockerUtils.isDockerAvailable()) {
-            // Configuración dinámica de PostgreSQL real
-            registry.add("spring.datasource.url", postgres::getJdbcUrl);
-            registry.add("spring.datasource.username", postgres::getUsername);
-            registry.add("spring.datasource.password", postgres::getPassword);
+        // Configuración dinámica de PostgreSQL real
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
 
-            // Validación estricta de esquema contra Flyway
-            registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-            registry.add("spring.jpa.open-in-view", () -> "false");
+        // Validación estricta de esquema contra Flyway
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("spring.jpa.open-in-view", () -> "false");
 
-            // Estadísticas de Hibernate: permite contar sentencias SQL preparadas
-            // en las pruebas para verificar el problema N+1 de forma programática.
-            registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
+        // Estadísticas de Hibernate: permite contar sentencias SQL preparadas
+        // en las pruebas para verificar el problema N+1 de forma programática.
+        registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
 
-            // Configuración dinámica de MongoDB real
-            registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
-        }
+        // Configuración dinámica de MongoDB real
+        registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
     }
 }

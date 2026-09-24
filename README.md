@@ -13,7 +13,6 @@ Desarrollado por: Derrek Adrián Ureña Solís y José Arrieta Sancho.
 
 - [Propuesta de dominio](docs/Propuesta_de_Dominio.pdf) — entidades de negocio, procesos y alcance.
 - [Diagrama de arquitectura previsto](docs/diagrama.md)
-- [Diagrama de arquitectura actual](docs/diagrama_actual.md) 
 - [ADR-001 · Elección de stack](docs/adr/ADR-001-EleccionStack.md)
 
 ## Requisitos previos
@@ -67,18 +66,27 @@ curl http://localhost:8080/api/cursos
 ```
 ```json
 [
-  {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":20,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
+  {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":19,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
   {"id":2,"codigo":"LESCO-102","nombre":"LESCO Intermedio","nivel":"INTERMEDIO","precioFinal":49500.00,"cupoTotal":15,"cuposDisponibles":15,"fechaInicio":"2026-09-07","fechaFin":"2026-12-04"}
 ]
 ```
 
 Ese resultado viene de los datos semilla de Flyway (`src/main/resources/db/migration`) y
 solo muestra los cursos **publicados** — hay un tercer curso de ejemplo (`LESCO-201`) que
-no aparece a propósito, porque todavía no está publicado.
+no aparece a propósito, porque todavía no está publicado. `cuposDisponibles` de `LESCO-101`
+da 19 (no 20) porque la matrícula semilla `MAT-2026-000001` ya está `ACTIVA` en ese curso
+(ver [Frontera DTO](#frontera-dto--capa-de-negocio-laboratorio-4) más abajo).
 
 ## Cómo Ejecutar las Pruebas de Integración con Testcontainers
 
-Las pruebas de integración levantan contenedores reales de **PostgreSQL 16** y **MongoDB 7.0** usando **Testcontainers**, aplican automáticamente todas las migraciones de Flyway (`V1` a `V8`), validan el mapeo JPA con `spring.jpa.hibernate.ddl-auto=validate` y prueban consultas de negocio, repositorios genéricos y la corrección del problema N+1.
+Las pruebas de integración levantan contenedores reales de **PostgreSQL 16** y **MongoDB 7.0** usando **Testcontainers**, aplican automáticamente todas las migraciones de Flyway (`V1` a `V8`), validan el mapeo JPA con `spring.jpa.hibernate.ddl-auto=validate`, prueban consultas de negocio, repositorios genéricos, la corrección del problema N+1, y el rollback transaccional del proceso de matriculación.
+
+**Necesitan Docker corriendo, sin excepción.** Antes estas pruebas tenían un
+`@EnabledIf(isDockerAvailable)`: si Docker faltaba, se marcaban "skipped" en
+silencio y `./gradlew build` igual terminaba en verde, sin haber corrido nada
+— un CI o un desarrollador podían creer que todo pasó sin que se ejecutara ni
+una sola prueba. Se quitó esa condición: si Docker no está disponible, ahora
+la prueba **falla** con el error real de Testcontainers, no se salta.
 
 ### Comando para correr las pruebas:
 
@@ -98,7 +106,12 @@ Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositor
 1. Testcontainers descarga e inicia los contenedores `postgres:16-alpine` y `mongo:7.0`.
 2. Flyway ejecuta exitosamente las migraciones `V1__crear_usuario.sql` hasta `V8__datos_semilla_matricula_pago.sql`.
 3. Hibernate valida la coherencia entre las entidades JPA y la BD (`Schema-validation: [SUCCESS]`).
-4. Se ejecutan en verde (PASSED) **8 pruebas de integración**:
+4. Se ejecutan en verde (PASSED) **11 pruebas de integración**, en 3 clases:
+
+   [`Lab1ApplicationTests`](src/test/java/cr/ac/una/lab1/Lab1ApplicationTests.java):
+   - `contextLoads`: el contexto de Spring arranca contra Postgres/Mongo reales.
+
+   [`PersistenciaIntegrationTest`](src/test/java/cr/ac/una/lab1/PersistenciaIntegrationTest.java) (Laboratorio 3):
    - `test1_ValidarEsquemaFlywayYEntidades`: Verifica el esquema Flyway y las entidades JPA.
    - `test2_DemostracionProblemaNMasUnoYCorreccionFetch`: Demuestra y resuelve el problema N+1.
    - `test3_ConsultaJPQL1_CursosPublicadosConLecciones`: Prueba JPQL de cursos publicados con lecciones.
@@ -107,6 +120,10 @@ Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositor
    - `test6_ConsultaCriteriaSpecification_MatriculasFiltrosDinamicos`: Prueba Specification dinámica de matrículas.
    - `test7_RepositorioGenericoBaseJPA`: Prueba operaciones genéricas de `BaseRepository` (CRUD, paginación, sort).
    - `test8_RepositorioGenericoBaseMongoDB`: Prueba operaciones genéricas de `BaseMongoRepository` sobre MongoDB.
+
+   [`TransaccionIntegrationTest`](src/test/java/cr/ac/una/lab1/TransaccionIntegrationTest.java) (Laboratorio 4):
+   - `test9_RollbackVerificado_FalloEnPagoRevierteMatricula`: un `@SpyBean` hace fallar `PagoRepository.save()` a mitad del proceso de matriculación y comprueba que la `Matricula` ya persistida también se revierte (transacción verificada).
+   - `test10_ReglasNegocioYPatronState`: reglas de `MatriculaService` y las transiciones del patrón State, contra datos reales.
 
 El reporte HTML completo se genera en: `build/reports/tests/test/index.html`.
 
@@ -343,3 +360,157 @@ ORDER BY c.fecha_inicio ASC;
   ```
 
 ---
+
+## Frontera DTO — Capa de Negocio (Laboratorio 4)
+
+Los dos procesos de negocio (matriculación y publicación de curso) reciben y
+devuelven exclusivamente DTOs (`record`); ninguna entidad JPA (`Curso`,
+`Matricula`, `Usuario`, `Leccion`, `Pago`...) sale del paquete `business` hacia
+`presentation`. El mapeo es manual (sin MapStruct), en un método privado de
+cada servicio. Patrones de diseño usados dentro de estos servicios (State,
+Strategy): ver [docs/patrones.md](docs/patrones.md).
+
+### Proceso 1 — Matriculación de un estudiante
+
+- **Entrada:** [`MatriculaRequestDTO`](src/main/java/cr/ac/una/lab1/business/MatriculaRequestDTO.java)
+  — `record` con Bean Validation (`@NotNull` en `estudianteId`/`cursoId`/`leccionId`/`metodoPago`,
+  `@Size(max = 50)` en `referencia`). El formato de `referencia` (8 dígitos para
+  SINPE, 6-30 caracteres para transferencia, ninguna para tarjeta) **no** se valida
+  con Bean Validation porque depende de otro campo (`metodoPago`): esa validación
+  condicional la hace el patrón Strategy dentro del servicio, no el DTO.
+- **Salida:** [`MatriculaResponseDTO`](src/main/java/cr/ac/una/lab1/business/MatriculaResponseDTO.java)
+  — combina datos de `Matricula`, `Curso`, `Leccion` y `Pago` en un solo `record` plano.
+- **Mapeo:** `MatriculaService.toResponseDTO(Matricula, Curso, Pago)` (privado, manual).
+
+Ejemplo real contra los datos semilla (Diego, `usuarioId=6`, tenía una matrícula
+`CANCELADA` en `LESCO-101` — puede volver a matricularse en ese mismo curso):
+
+```bash
+curl -X POST http://localhost:8080/api/matriculas \
+  -H "Content-Type: application/json" \
+  -d '{"estudianteId":6,"cursoId":1,"leccionId":1,"metodoPago":"TARJETA","referencia":null}'
+```
+```json
+{
+  "matriculaId": 4,
+  "consecutivo": "MAT-2026-000004",
+  "estudianteId": 6,
+  "nombreEstudiante": "Diego Chacón Ureña",
+  "cursoId": 1,
+  "codigoCurso": "LESCO-101",
+  "nombreCurso": "LESCO Básico I",
+  "leccionId": 1,
+  "tituloLeccion": "Alfabeto dactilológico",
+  "estadoMatricula": "PENDIENTE",
+  "precioFinal": 45000.00,
+  "fechaMatricula": "2026-09-24T10:15:00Z",
+  "pagoId": 4,
+  "estadoPago": "PENDIENTE",
+  "metodoPago": "TARJETA"
+}
+```
+
+(`fechaMatricula` la pone la base de datos al insertar — va a mostrar la hora real
+en la que corriste el comando, no la del ejemplo.)
+
+### Proceso 2 — Publicación y habilitación de un curso
+
+- **Entrada:** ninguna. `POST /api/cursos/{id}/publicar` solo recibe el id por
+  *path variable* — no hay payload que validar con Bean Validation porque la
+  acción no necesita datos adicionales del cliente, solo identificar el curso.
+- **Salida:** [`CursoCatalogoDTO`](src/main/java/cr/ac/una/lab1/business/CursoCatalogoDTO.java)
+  — el mismo `record` que ya usa `GET /api/cursos` para el catálogo público
+  (un solo DTO de salida reutilizado en dos endpoints, sin duplicarlo).
+- **Mapeo:** `CursoService.aCatalogoDTO(Curso)` (privado, manual).
+
+Con los datos semilla actuales no hay ningún curso en estado "publicable"
+(`LESCO-101`/`LESCO-102` ya están publicados, `LESCO-201` no tiene lecciones),
+así que en vez de fabricar una publicación exitosa artificial, estos son los
+dos caminos de regla que sí se pueden reproducir tal cual contra la base semilla
+— y que muestran cómo `GlobalExceptionHandler` traduce una `ReglaNegocioException`
+a un 422 con cuerpo JSON, nunca a un stack trace ni a la entidad cruda:
+
+```bash
+curl -i -X POST http://localhost:8080/api/cursos/1/publicar   # LESCO-101, ya publicado
+```
+```json
+{
+  "timestamp": "2026-09-24T10:15:00Z",
+  "status": 422,
+  "error": "Unprocessable Entity",
+  "mensaje": "El curso 'LESCO-101' ya está publicado."
+}
+```
+
+```bash
+curl -i -X POST http://localhost:8080/api/cursos/3/publicar   # LESCO-201, sin lecciones
+```
+```json
+{
+  "timestamp": "2026-09-24T10:15:00Z",
+  "status": 422,
+  "error": "Unprocessable Entity",
+  "mensaje": "No se puede publicar el curso 'LESCO-201' porque no tiene ninguna lección asignada."
+}
+```
+
+### Verificación de que ninguna entidad cruza la frontera
+
+`presentation/CursoController.java` y `presentation/MatriculaController.java`
+solo importan tipos de `cr.ac.una.lab1.business` (los DTOs) y de Spring; ningún
+método público de ningún controlador recibe ni devuelve `Curso`, `Matricula`,
+`Usuario`, `Leccion` ni `Pago`. Comando usado para confirmarlo (sin resultados
+= sin fugas):
+
+```bash
+grep -rn "Curso \|Matricula \|Usuario \|Leccion \|Pago " src/main/java/cr/ac/una/lab1/presentation/
+```
+
+---
+
+## Pruebas Unitarias con Mockito y Cobertura JaCoCo (Laboratorio 4)
+
+A diferencia de las pruebas de [Testcontainers](#cómo-ejecutar-las-pruebas-de-integración-con-testcontainers)
+(que levantan Postgres/Mongo reales), estas son **pruebas unitarias puras**:
+`MatriculaService` y `CursoService` se instancian a mano con sus repositorios
+simulados con Mockito (`@Mock`), sin contexto de Spring, sin Docker y sin base
+de datos — por eso corren en milisegundos.
+
+### Comando para correr solo las pruebas unitarias
+
+```bash
+./gradlew test --tests "cr.ac.una.lab1.business.*"
+```
+
+(`./gradlew test` a secas corre además las de Testcontainers, que si necesitan Docker arriba.)
+
+### 31 pruebas unitarias, organizadas por clase
+
+| Clase | Qué cubre | # |
+|---|---|---|
+| [`MatriculaServiceTest`](src/test/java/cr/ac/una/lab1/business/MatriculaServiceTest.java) | `matricular()`: camino feliz + 9 caminos de regla (estudiante/curso/lección inexistentes, curso no publicado, lección de otro curso, sin cupo, ya matriculado, método de pago no soportado, Strategy que rechaza la referencia). `aprobarPago()`/`cancelarMatricula()`: las 6 transiciones del patrón State (PENDIENTE/ACTIVA/CANCELADA × activar/cancelar), incluyendo `matriculaId` inexistente. | 18 |
+| [`CursoServiceTest`](src/test/java/cr/ac/una/lab1/business/CursoServiceTest.java) | `listarCatalogoPublico()`: cálculo de `cuposDisponibles`/`precioFinal`. `publicarCurso()`: camino feliz + 3 caminos de regla (curso inexistente, ya publicado, sin lecciones). | 5 |
+| [`ValidadorSinpeMovilTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorSinpeMovilTest.java) | Formato de referencia SINPE (8 dígitos, nula, inválida). | 3 |
+| [`ValidadorTransferenciaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTransferenciaTest.java) | Formato de referencia de transferencia (alfanumérica 6-30, vacía, con espacios). | 3 |
+| [`ValidadorTarjetaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTarjetaTest.java) | TARJETA nunca exige referencia al matricular. | 2 |
+
+Los validadores Strategy se prueban dos veces con propósitos distintos: en
+`MatriculaServiceTest` están **mockeados** (se verifica que `MatriculaService`
+los invoque y propague lo que lancen); en sus propios `*Test` se instancian
+**reales**, sin mocks, para ejercitar la lógica de formato de cada uno.
+
+### Cobertura JaCoCo (mínimo 70% exigido, restringido al paquete de negocio)
+
+`build.gradle` agrega el plugin `jacoco` y filtra tanto el reporte como la
+verificación a `cr/ac/una/lab1/business/**` (no cuenta cobertura de entidades
+JPA, repositorios ni controladores — esos ya se prueban con Testcontainers).
+`check` (y por lo tanto `build`) dependen de `jacocoTestCoverageVerification`,
+así que **el build falla si la cobertura del paquete de negocio baja de 70%**:
+
+```bash
+./gradlew jacocoTestCoverageVerification --tests "cr.ac.una.lab1.business.*"
+```
+
+Resultado actual: **163 de 165 líneas cubiertas (98.8%)** — el reporte HTML
+completo queda en `build/reports/jacoco/test/html/index.html` después de correr
+`./gradlew test`.

@@ -21,7 +21,6 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.SpyBean;
@@ -57,7 +56,6 @@ import static org.mockito.ArgumentMatchers.any;
  * interceptar la llamada. {@code any()} captura cualquier argumento.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@EnabledIf("cr.ac.una.lab1.DockerUtils#isDockerAvailable")
 class TransaccionIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private MatriculaService     matriculaService;
