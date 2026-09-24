@@ -449,3 +449,52 @@ método público de ningún controlador recibe ni devuelve `Curso`, `Matricula`,
 ```bash
 grep -rn "Curso \|Matricula \|Usuario \|Leccion \|Pago " src/main/java/cr/ac/una/lab1/presentation/
 ```
+
+---
+
+## Pruebas Unitarias con Mockito y Cobertura JaCoCo (Laboratorio 4)
+
+A diferencia de las pruebas de [Testcontainers](#cómo-ejecutar-las-pruebas-de-integración-con-testcontainers)
+(que levantan Postgres/Mongo reales), estas son **pruebas unitarias puras**:
+`MatriculaService` y `CursoService` se instancian a mano con sus repositorios
+simulados con Mockito (`@Mock`), sin contexto de Spring, sin Docker y sin base
+de datos — por eso corren en milisegundos.
+
+### Comando para correr solo las pruebas unitarias
+
+```bash
+./gradlew test --tests "cr.ac.una.lab1.business.*"
+```
+
+(`./gradlew test` a secas corre además las de Testcontainers, que si necesitan Docker arriba.)
+
+### 31 pruebas unitarias, organizadas por clase
+
+| Clase | Qué cubre | # |
+|---|---|---|
+| [`MatriculaServiceTest`](src/test/java/cr/ac/una/lab1/business/MatriculaServiceTest.java) | `matricular()`: camino feliz + 9 caminos de regla (estudiante/curso/lección inexistentes, curso no publicado, lección de otro curso, sin cupo, ya matriculado, método de pago no soportado, Strategy que rechaza la referencia). `aprobarPago()`/`cancelarMatricula()`: las 6 transiciones del patrón State (PENDIENTE/ACTIVA/CANCELADA × activar/cancelar), incluyendo `matriculaId` inexistente. | 18 |
+| [`CursoServiceTest`](src/test/java/cr/ac/una/lab1/business/CursoServiceTest.java) | `listarCatalogoPublico()`: cálculo de `cuposDisponibles`/`precioFinal`. `publicarCurso()`: camino feliz + 3 caminos de regla (curso inexistente, ya publicado, sin lecciones). | 5 |
+| [`ValidadorSinpeMovilTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorSinpeMovilTest.java) | Formato de referencia SINPE (8 dígitos, nula, inválida). | 3 |
+| [`ValidadorTransferenciaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTransferenciaTest.java) | Formato de referencia de transferencia (alfanumérica 6-30, vacía, con espacios). | 3 |
+| [`ValidadorTarjetaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTarjetaTest.java) | TARJETA nunca exige referencia al matricular. | 2 |
+
+Los validadores Strategy se prueban dos veces con propósitos distintos: en
+`MatriculaServiceTest` están **mockeados** (se verifica que `MatriculaService`
+los invoque y propague lo que lancen); en sus propios `*Test` se instancian
+**reales**, sin mocks, para ejercitar la lógica de formato de cada uno.
+
+### Cobertura JaCoCo (mínimo 70% exigido, restringido al paquete de negocio)
+
+`build.gradle` agrega el plugin `jacoco` y filtra tanto el reporte como la
+verificación a `cr/ac/una/lab1/business/**` (no cuenta cobertura de entidades
+JPA, repositorios ni controladores — esos ya se prueban con Testcontainers).
+`check` (y por lo tanto `build`) dependen de `jacocoTestCoverageVerification`,
+así que **el build falla si la cobertura del paquete de negocio baja de 70%**:
+
+```bash
+./gradlew jacocoTestCoverageVerification --tests "cr.ac.una.lab1.business.*"
+```
+
+Resultado actual: **163 de 165 líneas cubiertas (98.8%)** — el reporte HTML
+completo queda en `build/reports/jacoco/test/html/index.html` después de correr
+`./gradlew test`.
