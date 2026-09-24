@@ -79,7 +79,14 @@ da 19 (no 20) porque la matrícula semilla `MAT-2026-000001` ya está `ACTIVA` e
 
 ## Cómo Ejecutar las Pruebas de Integración con Testcontainers
 
-Las pruebas de integración levantan contenedores reales de **PostgreSQL 16** y **MongoDB 7.0** usando **Testcontainers**, aplican automáticamente todas las migraciones de Flyway (`V1` a `V8`), validan el mapeo JPA con `spring.jpa.hibernate.ddl-auto=validate` y prueban consultas de negocio, repositorios genéricos y la corrección del problema N+1.
+Las pruebas de integración levantan contenedores reales de **PostgreSQL 16** y **MongoDB 7.0** usando **Testcontainers**, aplican automáticamente todas las migraciones de Flyway (`V1` a `V8`), validan el mapeo JPA con `spring.jpa.hibernate.ddl-auto=validate`, prueban consultas de negocio, repositorios genéricos, la corrección del problema N+1, y el rollback transaccional del proceso de matriculación.
+
+**Necesitan Docker corriendo, sin excepción.** Antes estas pruebas tenían un
+`@EnabledIf(isDockerAvailable)`: si Docker faltaba, se marcaban "skipped" en
+silencio y `./gradlew build` igual terminaba en verde, sin haber corrido nada
+— un CI o un desarrollador podían creer que todo pasó sin que se ejecutara ni
+una sola prueba. Se quitó esa condición: si Docker no está disponible, ahora
+la prueba **falla** con el error real de Testcontainers, no se salta.
 
 ### Comando para correr las pruebas:
 
@@ -99,7 +106,12 @@ Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositor
 1. Testcontainers descarga e inicia los contenedores `postgres:16-alpine` y `mongo:7.0`.
 2. Flyway ejecuta exitosamente las migraciones `V1__crear_usuario.sql` hasta `V8__datos_semilla_matricula_pago.sql`.
 3. Hibernate valida la coherencia entre las entidades JPA y la BD (`Schema-validation: [SUCCESS]`).
-4. Se ejecutan en verde (PASSED) **8 pruebas de integración**:
+4. Se ejecutan en verde (PASSED) **11 pruebas de integración**, en 3 clases:
+
+   [`Lab1ApplicationTests`](src/test/java/cr/ac/una/lab1/Lab1ApplicationTests.java):
+   - `contextLoads`: el contexto de Spring arranca contra Postgres/Mongo reales.
+
+   [`PersistenciaIntegrationTest`](src/test/java/cr/ac/una/lab1/PersistenciaIntegrationTest.java) (Laboratorio 3):
    - `test1_ValidarEsquemaFlywayYEntidades`: Verifica el esquema Flyway y las entidades JPA.
    - `test2_DemostracionProblemaNMasUnoYCorreccionFetch`: Demuestra y resuelve el problema N+1.
    - `test3_ConsultaJPQL1_CursosPublicadosConLecciones`: Prueba JPQL de cursos publicados con lecciones.
@@ -108,6 +120,10 @@ Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositor
    - `test6_ConsultaCriteriaSpecification_MatriculasFiltrosDinamicos`: Prueba Specification dinámica de matrículas.
    - `test7_RepositorioGenericoBaseJPA`: Prueba operaciones genéricas de `BaseRepository` (CRUD, paginación, sort).
    - `test8_RepositorioGenericoBaseMongoDB`: Prueba operaciones genéricas de `BaseMongoRepository` sobre MongoDB.
+
+   [`TransaccionIntegrationTest`](src/test/java/cr/ac/una/lab1/TransaccionIntegrationTest.java) (Laboratorio 4):
+   - `test9_RollbackVerificado_FalloEnPagoRevierteMatricula`: un `@SpyBean` hace fallar `PagoRepository.save()` a mitad del proceso de matriculación y comprueba que la `Matricula` ya persistida también se revierte (transacción verificada).
+   - `test10_ReglasNegocioYPatronState`: reglas de `MatriculaService` y las transiciones del patrón State, contra datos reales.
 
 El reporte HTML completo se genera en: `build/reports/tests/test/index.html`.
 
