@@ -6,25 +6,15 @@ on:
   pull_request:              
     branches: [ main ]
 
-jobs:                        
-  build:  
-    runs-on: ubuntu-latest  
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: lescocr
-          POSTGRES_USER: lescocr
-          POSTGRES_PASSWORD: lescocr
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U lescocr -d lescocr"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
+jobs:
+  # Sin bloque "services": las pruebas de integración usan Testcontainers, que
+  # levanta sus propios contenedores efímeros de Postgres y Mongo hablando
+  # directo con el Docker del runner (ya viene instalado en ubuntu-latest).
+  # Un servicio "postgres" estático aquí no lo usa ninguna prueba.
+  build:
+    runs-on: ubuntu-latest
 
-    steps:                 
+    steps:
       - name: Descargar el código
         uses: actions/checkout@v4
 
