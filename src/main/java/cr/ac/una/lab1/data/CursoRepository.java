@@ -13,6 +13,12 @@ public interface CursoRepository extends BaseRepository<Curso, Long> {
     List<Curso> findByPublicadoTrue();
 
     /**
+     * Devuelve {@code true} si existe otro curso (distinto de {@code excludeId}) con el mismo
+     * código y ya publicado. Usado para evitar publicar un duplicado en el mismo periodo.
+     */
+    boolean existsByCodigoAndPublicadoTrueAndIdNot(String codigo, Long excludeId);
+
+    /**
      * Consulta de Negocio 1 (JPQL):
      * Cursos publicados con sus lecciones cargadas mediante JOIN FETCH en una única consulta SQL.
      * Soluciona el problema de N+1 consultas al evitar subconsultas perezosas (LAZY) por cada curso.
