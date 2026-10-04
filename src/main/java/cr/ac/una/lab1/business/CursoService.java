@@ -5,7 +5,9 @@ import cr.ac.una.lab1.business.exception.ReglaNegocioException;
 import cr.ac.una.lab1.data.Curso;
 import cr.ac.una.lab1.data.CursoRepository;
 import cr.ac.una.lab1.data.EstadoMatricula;
+import cr.ac.una.lab1.data.Leccion;
 import cr.ac.una.lab1.data.LeccionRepository;
+import cr.ac.una.lab1.data.mongo.RecursoMultimediaRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -17,10 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>{@link #listarCatalogoPublico()} — devuelve cursos publicados con precio final y cupos.
- *   <li>{@link #publicarCurso(Long)} — valida pre-condiciones y activa un curso para el catálogo.
+ *   <li>{@link #publicarCurso(Long, PublicarCursoRequestDTO)} — valida pre-condiciones y activa un
+ *       curso para el catálogo.
  * </ul>
  *
- * <p>Ver "Proceso 2: Publicación y habilitación de un curso" en la propuesta de dominio.
+ * <p>Ver "Proceso 1: Publicación y habilitación de un curso" en la propuesta de dominio.
  */
 @Service
 public class CursoService {
@@ -28,14 +31,17 @@ public class CursoService {
     private final CursoRepository cursoRepository;
     private final cr.ac.una.lab1.data.MatriculaRepository matriculaRepository;
     private final LeccionRepository leccionRepository;
+    private final RecursoMultimediaRepository recursoMultimediaRepository;
 
     public CursoService(
             CursoRepository cursoRepository,
             cr.ac.una.lab1.data.MatriculaRepository matriculaRepository,
-            LeccionRepository leccionRepository) {
+            LeccionRepository leccionRepository,
+            RecursoMultimediaRepository recursoMultimediaRepository) {
         this.cursoRepository = cursoRepository;
         this.matriculaRepository = matriculaRepository;
         this.leccionRepository = leccionRepository;
+        this.recursoMultimediaRepository = recursoMultimediaRepository;
     }
 
     // -----------------------------------------------------------------------
@@ -55,31 +61,78 @@ public class CursoService {
     /**
      * Publica un curso para que aparezca en el catálogo público.
      *
-     * <p>Reglas de negocio verificadas antes de publicar:
+     * <p>Reglas de negocio verificadas (en orden) antes de publicar:
      * <ol>
-     *   <li>El curso debe existir.
-     *   <li>Si ya está publicado, lanza {@link ReglaNegocioException} (idempotencia explícita).
-     *   <li>El curso debe tener al menos una lección asignada.
+     *   <li>El curso debe existir ({@link EntidadNoEncontradaException} si no).
+     *   <li>No debe estar ya publicado ({@link ReglaNegocioException}).
+     *   <li>Las fechas deben ser coherentes: {@code fechaInicio} anterior a {@code fechaFin}
+     *       ({@link ReglaNegocioException}).
+     *   <li>No debe existir otro curso publicado con el mismo código en el catálogo
+     *       ({@link ReglaNegocioException} — duplicado en mismo periodo).
+     *   <li>Debe tener al menos una lección asignada ({@link ReglaNegocioException}).
+     *   <li>Todas las lecciones deben tener un instructor asignado ({@link ReglaNegocioException}).
+     *   <li>Al menos una lección debe tener un recurso multimedia registrado en MongoDB
+     *       ({@link ReglaNegocioException}).
      * </ol>
      *
      * @param cursoId identificador del curso a publicar
+     * @param request solicitud con el ID del administrador que autoriza la publicación
      * @return DTO del catálogo con el precio y cupos actualizados
      */
     @Transactional
-    public CursoCatalogoDTO publicarCurso(Long cursoId) {
+    public CursoCatalogoDTO publicarCurso(Long cursoId, PublicarCursoRequestDTO request) {
+
+        // Regla 1: el curso debe existir
         Curso curso = cursoRepository.findById(cursoId)
                 .orElseThrow(() -> new EntidadNoEncontradaException("Curso", cursoId));
 
+        // Regla 2: no publicar dos veces
         if (curso.isPublicado()) {
             throw new ReglaNegocioException(
                     "El curso '" + curso.getCodigo() + "' ya está publicado.");
         }
 
-        boolean tieneLecciones = !leccionRepository.findByCursoIdOrderByOrdenAsc(cursoId).isEmpty();
-        if (!tieneLecciones) {
+        // Regla 3: coherencia de fechas
+        if (!curso.getFechaInicio().isBefore(curso.getFechaFin())) {
+            throw new ReglaNegocioException(
+                    "La fecha de inicio (" + curso.getFechaInicio() +
+                    ") debe ser anterior a la fecha de fin (" + curso.getFechaFin() +
+                    ") del curso '" + curso.getCodigo() + "'.");
+        }
+
+        // Regla 4: sin duplicado publicado con el mismo código en el catálogo
+        if (cursoRepository.existsByCodigoAndPublicadoTrueAndIdNot(curso.getCodigo(), cursoId)) {
+            throw new ReglaNegocioException(
+                    "Ya existe un curso publicado con el código '" + curso.getCodigo() +
+                    "'. No se puede tener dos versiones activas del mismo curso en el catálogo.");
+        }
+
+        // Regla 5: al menos una lección asignada
+        List<Leccion> lecciones = leccionRepository.findByCursoIdOrderByOrdenAsc(cursoId);
+        if (lecciones.isEmpty()) {
             throw new ReglaNegocioException(
                     "No se puede publicar el curso '" + curso.getCodigo() +
                     "' porque no tiene ninguna lección asignada.");
+        }
+
+        // Regla 6: todas las lecciones deben tener instructor asignado
+        boolean algulnasSinInstructor = lecciones.stream()
+                .anyMatch(l -> l.getInstructor() == null);
+        if (algulnasSinInstructor) {
+            throw new ReglaNegocioException(
+                    "El curso '" + curso.getCodigo() +
+                    "' tiene lecciones sin instructor asignado. " +
+                    "Todas las lecciones deben tener un instructor antes de publicar.");
+        }
+
+        // Regla 7: al menos una lección con recurso multimedia registrado en MongoDB
+        boolean tieneRecurso = lecciones.stream()
+                .anyMatch(l -> !recursoMultimediaRepository.findByLeccionIdOrderByOrdenAsc(l.getId()).isEmpty());
+        if (!tieneRecurso) {
+            throw new ReglaNegocioException(
+                    "El curso '" + curso.getCodigo() +
+                    "' no tiene recursos multimedia registrados en ninguna de sus lecciones. " +
+                    "Se requiere al menos un recurso antes de publicar.");
         }
 
         curso.publicar();
