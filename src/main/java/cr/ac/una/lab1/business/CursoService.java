@@ -8,9 +8,14 @@ import cr.ac.una.lab1.data.EstadoMatricula;
 import cr.ac.una.lab1.data.Leccion;
 import cr.ac.una.lab1.data.LeccionRepository;
 import cr.ac.una.lab1.data.mongo.RecursoMultimediaRepository;
+import cr.ac.una.lab1.data.specification.CursoSpecification;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +57,29 @@ public class CursoService {
         return cursoRepository.findByPublicadoTrue().stream()
                 .map(this::aCatalogoDTO)
                 .toList();
+    }
+
+    /** Un curso por id. Lanza {@link EntidadNoEncontradaException} (404) si no existe. */
+    @Transactional(readOnly = true)
+    public CursoCatalogoDTO obtenerPorId(Long id) {
+        Curso curso = cursoRepository.findById(id)
+                .orElseThrow(() -> new EntidadNoEncontradaException("Curso", id));
+        return aCatalogoDTO(curso);
+    }
+
+    /**
+     * Colección paginada y filtrable de cursos (patrón Specification, ver
+     * {@link CursoSpecification}). Todos los filtros son opcionales; el orden
+     * y el tamaño de página los resuelve Spring a partir de {@code pageable}
+     * ({@code ?page=&size=&sort=}).
+     */
+    @Transactional(readOnly = true)
+    public Page<CursoCatalogoDTO> buscar(
+            String texto, String nivel, BigDecimal precioMax, Boolean publicado,
+            LocalDate fechaInicioDespuesDe, Pageable pageable) {
+        Specification<Curso> filtros =
+                CursoSpecification.conFiltros(texto, nivel, precioMax, publicado, fechaInicioDespuesDe);
+        return cursoRepository.findAll(filtros, pageable).map(this::aCatalogoDTO);
     }
 
     // -----------------------------------------------------------------------

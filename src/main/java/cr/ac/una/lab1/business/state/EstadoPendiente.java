@@ -1,8 +1,6 @@
 package cr.ac.una.lab1.business.state;
 
-import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
 import cr.ac.una.lab1.data.EstadoMatricula;
-import cr.ac.una.lab1.data.Matricula;
 
 /**
  * Estado PENDIENTE: matrícula creada, pago aún no aprobado.
@@ -20,12 +18,12 @@ public class EstadoPendiente implements MatriculaEstado {
     private EstadoPendiente() {}
 
     @Override
-    public void activar(Matricula matricula) {
-        matricula.setEstado(EstadoMatricula.ACTIVA);
+    public EstadoMatricula activar() {
+        return EstadoMatricula.ACTIVA;
     }
 
     @Override
-    public void cancelar(Matricula matricula) {
-        matricula.setEstado(EstadoMatricula.CANCELADA);
+    public EstadoMatricula cancelar() {
+        return EstadoMatricula.CANCELADA;
     }
 }

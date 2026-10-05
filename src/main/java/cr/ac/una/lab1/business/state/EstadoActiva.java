@@ -2,7 +2,6 @@ package cr.ac.una.lab1.business.state;
 
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
 import cr.ac.una.lab1.data.EstadoMatricula;
-import cr.ac.una.lab1.data.Matricula;
 
 /**
  * Estado ACTIVA: el pago fue aprobado y la matrícula está vigente.
@@ -24,12 +23,12 @@ public class EstadoActiva implements MatriculaEstado {
     private EstadoActiva() {}
 
     @Override
-    public void activar(Matricula matricula) {
+    public EstadoMatricula activar() {
         throw new CambioEstadoInvalidoException(EstadoMatricula.ACTIVA, "activar");
     }
 
     @Override
-    public void cancelar(Matricula matricula) {
-        matricula.setEstado(EstadoMatricula.CANCELADA);
+    public EstadoMatricula cancelar() {
+        return EstadoMatricula.CANCELADA;
     }
 }

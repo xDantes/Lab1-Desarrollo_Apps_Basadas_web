@@ -79,6 +79,12 @@ public class Matricula {
     // Se resuelve el estado actual de forma INLINE (sin campo @Transient) para
     // evitar que Hibernate interprete un campo no persistido durante la
     // instrumentación de bytecode.
+    //
+    // Las implementaciones de MatriculaEstado NO mutan esta entidad: solo
+    // devuelven el siguiente EstadoMatricula (o lanzan la excepción). El campo
+    // `estado` se escribe únicamente aquí abajo, dentro de Matricula — no hay
+    // ningún setEstado() público que otro código pueda llamar para saltarse
+    // la validación del patrón State.
     // -----------------------------------------------------------------------
 
     /**
@@ -86,7 +92,7 @@ public class Matricula {
      * Solo válida desde PENDIENTE; lanza {@code CambioEstadoInvalidoException} en otro caso.
      */
     public void activar() {
-        estadoActual().activar(this);
+        this.estado = estadoActual().activar();
     }
 
     /**
@@ -94,15 +100,7 @@ public class Matricula {
      * Válida desde PENDIENTE o ACTIVA; lanza {@code CambioEstadoInvalidoException} desde CANCELADA.
      */
     public void cancelar() {
-        estadoActual().cancelar(this);
-    }
-
-    /**
-     * Usado por las implementaciones de {@link MatriculaEstado} para cambiar el
-     * valor persistido. No forma parte de la API pública del dominio.
-     */
-    public void setEstado(EstadoMatricula nuevoEstado) {
-        this.estado = nuevoEstado;
+        this.estado = estadoActual().cancelar();
     }
 
     // -----------------------------------------------------------------------
