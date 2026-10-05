@@ -62,19 +62,28 @@ curl http://localhost:8080/actuator/health
 ```
 
 ```bash
-curl http://localhost:8080/api/cursos
+curl "http://localhost:8080/api/v1/cursos?publicado=true"
 ```
 ```json
-[
-  {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":19,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
-  {"id":2,"codigo":"LESCO-102","nombre":"LESCO Intermedio","nivel":"INTERMEDIO","precioFinal":49500.00,"cupoTotal":15,"cuposDisponibles":15,"fechaInicio":"2026-09-07","fechaFin":"2026-12-04"}
-]
+{
+  "content": [
+    {"id":1,"codigo":"LESCO-101","nombre":"LESCO Básico I","nivel":"BASICO","precioFinal":45000.00,"cupoTotal":20,"cuposDisponibles":19,"fechaInicio":"2026-09-07","fechaFin":"2026-11-13"},
+    {"id":2,"codigo":"LESCO-102","nombre":"LESCO Intermedio","nivel":"INTERMEDIO","precioFinal":49500.00,"cupoTotal":15,"cuposDisponibles":15,"fechaInicio":"2026-09-07","fechaFin":"2026-12-04"}
+  ],
+  "totalElements": 2,
+  "totalPages": 1,
+  "number": 0,
+  "size": 10
+}
 ```
+(`Page` de Spring Data trae más metadatos de los que se muestran arriba — `pageable`, `sort`, `first`, `last`, etc. — se omiten aquí por brevedad.)
 
-Ese resultado viene de los datos semilla de Flyway (`src/main/resources/db/migration`) y
-solo muestra los cursos **publicados** — hay un tercer curso de ejemplo (`LESCO-201`) que
-no aparece a propósito, porque todavía no está publicado. `cuposDisponibles` de `LESCO-101`
-da 19 (no 20) porque la matrícula semilla `MAT-2026-000001` ya está `ACTIVA` en ese curso
+Ese resultado viene de los datos semilla de Flyway (`src/main/resources/db/migration`).
+`?publicado=true` es uno de los filtros de negocio del endpoint (ver
+[Colecciones: paginación, orden y filtros](#colecciones-paginación-orden-y-filtros-laboratorio-5)
+más abajo) — sin él, `GET /api/v1/cursos` devuelve los 3 cursos semilla, incluido
+`LESCO-201` que todavía no está publicado. `cuposDisponibles` de `LESCO-101` da 19
+(no 20) porque la matrícula semilla `MAT-2026-000001` ya está `ACTIVA` en ese curso
 (ver [Frontera DTO](#frontera-dto--capa-de-negocio-laboratorio-4) más abajo).
 
 ## Cómo Ejecutar las Pruebas de Integración con Testcontainers
@@ -361,14 +370,15 @@ ORDER BY c.fecha_inicio ASC;
 
 ---
 
-## Frontera DTO — Capa de Negocio (Laboratorio 4)
+## Frontera DTO — Capa de Negocio (Laboratorio 4 y 5)
 
 Los dos procesos de negocio (matriculación y publicación de curso) reciben y
 devuelven exclusivamente DTOs (`record`); ninguna entidad JPA (`Curso`,
 `Matricula`, `Usuario`, `Leccion`, `Pago`...) sale del paquete `business` hacia
 `presentation`. El mapeo es manual (sin MapStruct), en un método privado de
 cada servicio. Patrones de diseño usados dentro de estos servicios (State,
-Strategy): ver [docs/patrones.md](docs/patrones.md).
+Strategy): ver [docs/patrones.md](docs/patrones.md). Todas las rutas viven bajo
+`/api/v1` (Laboratorio 5: contrato versionado).
 
 ### Proceso 1 — Matriculación de un estudiante
 
@@ -383,12 +393,18 @@ Strategy): ver [docs/patrones.md](docs/patrones.md).
 - **Mapeo:** `MatriculaService.toResponseDTO(Matricula, Curso, Pago)` (privado, manual).
 
 Ejemplo real contra los datos semilla (Diego, `usuarioId=6`, tenía una matrícula
-`CANCELADA` en `LESCO-101` — puede volver a matricularse en ese mismo curso):
+`CANCELADA` en `LESCO-101` — puede volver a matricularse en ese mismo curso).
+`POST` devuelve **201 Created** con el header **`Location`** apuntando al recurso
+que se acaba de crear (`GET /api/v1/matriculas/{id}`, ver más abajo):
 
 ```bash
-curl -X POST http://localhost:8080/api/matriculas \
+curl -i -X POST http://localhost:8080/api/v1/matriculas \
   -H "Content-Type: application/json" \
   -d '{"estudianteId":6,"cursoId":1,"leccionId":1,"metodoPago":"TARJETA","referencia":null}'
+```
+```
+HTTP/1.1 201
+Location: http://localhost:8080/api/v1/matriculas/4
 ```
 ```json
 {
@@ -413,14 +429,26 @@ curl -X POST http://localhost:8080/api/matriculas \
 (`fechaMatricula` la pone la base de datos al insertar — va a mostrar la hora real
 en la que corriste el comando, no la del ejemplo.)
 
+`GET /api/v1/matriculas/{id}` devuelve el mismo `MatriculaResponseDTO`. Las
+acciones de transición de estado (`POST .../aprobar`, `POST .../cancelar`)
+devuelven **204 No Content** — sin cuerpo: el cliente ya sabe a qué estado
+transicionó y puede releer el recurso con el `GET` anterior si necesita el
+detalle completo.
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/matriculas/4/aprobar
+```
+```
+HTTP/1.1 204
+```
+
 ### Proceso 2 — Publicación y habilitación de un curso
 
-- **Entrada:** ninguna. `POST /api/cursos/{id}/publicar` solo recibe el id por
-  *path variable* — no hay payload que validar con Bean Validation porque la
-  acción no necesita datos adicionales del cliente, solo identificar el curso.
+- **Entrada:** [`PublicarCursoRequestDTO`](src/main/java/cr/ac/una/lab1/business/PublicarCursoRequestDTO.java)
+  — `record` con un único campo, `administradorId`, validado `@NotNull`.
 - **Salida:** [`CursoCatalogoDTO`](src/main/java/cr/ac/una/lab1/business/CursoCatalogoDTO.java)
-  — el mismo `record` que ya usa `GET /api/cursos` para el catálogo público
-  (un solo DTO de salida reutilizado en dos endpoints, sin duplicarlo).
+  — el mismo `record` que ya usa `GET /api/v1/cursos` para el catálogo
+  (un solo DTO de salida reutilizado en varios endpoints, sin duplicarlo).
 - **Mapeo:** `CursoService.aCatalogoDTO(Curso)` (privado, manual).
 
 Con los datos semilla actuales no hay ningún curso en estado "publicable"
@@ -428,31 +456,55 @@ Con los datos semilla actuales no hay ningún curso en estado "publicable"
 así que en vez de fabricar una publicación exitosa artificial, estos son los
 dos caminos de regla que sí se pueden reproducir tal cual contra la base semilla
 — y que muestran cómo `GlobalExceptionHandler` traduce una `ReglaNegocioException`
-a un 422 con cuerpo JSON, nunca a un stack trace ni a la entidad cruda:
+a **Problem Details (RFC 9457)**, nunca a un stack trace ni a la entidad cruda:
 
 ```bash
-curl -i -X POST http://localhost:8080/api/cursos/1/publicar   # LESCO-101, ya publicado
+curl -i -X POST http://localhost:8080/api/v1/cursos/1/publicar \
+  -H "Content-Type: application/json" -d '{"administradorId":1}'   # LESCO-101, ya publicado
 ```
 ```json
 {
-  "timestamp": "2026-09-24T10:15:00Z",
+  "type": "https://lescocr.cr/problems/regla-negocio",
+  "title": "Regla de negocio violada",
   "status": 422,
-  "error": "Unprocessable Entity",
-  "mensaje": "El curso 'LESCO-101' ya está publicado."
+  "detail": "El curso 'LESCO-101' ya está publicado."
 }
 ```
 
 ```bash
-curl -i -X POST http://localhost:8080/api/cursos/3/publicar   # LESCO-201, sin lecciones
+curl -i -X POST http://localhost:8080/api/v1/cursos/3/publicar \
+  -H "Content-Type: application/json" -d '{"administradorId":1}'   # LESCO-201, sin lecciones
 ```
 ```json
 {
-  "timestamp": "2026-09-24T10:15:00Z",
+  "type": "https://lescocr.cr/problems/regla-negocio",
+  "title": "Regla de negocio violada",
   "status": 422,
-  "error": "Unprocessable Entity",
-  "mensaje": "No se puede publicar el curso 'LESCO-201' porque no tiene ninguna lección asignada."
+  "detail": "No se puede publicar el curso 'LESCO-201' porque no tiene ninguna lección asignada."
 }
 ```
+
+Otras excepciones de negocio tienen su propio `type`/`status` en vez de caer en
+el genérico 422 — por ejemplo `SinCupoDisponibleException`,
+`MatriculaDuplicadaException` y `CambioEstadoInvalidoException` responden con
+**409 Conflict** (son conflictos con el estado actual del recurso, no errores
+de validación). Mapeo completo en
+[`GlobalExceptionHandler`](src/main/java/cr/ac/una/lab1/presentation/GlobalExceptionHandler.java):
+
+| Excepción / causa | Status | `type` |
+|---|---|---|
+| `EntidadNoEncontradaException` | 404 | `.../problems/entidad-no-encontrada` |
+| `CambioEstadoInvalidoException` | 409 | `.../problems/cambio-estado-invalido` |
+| `MatriculaDuplicadaException` | 409 | `.../problems/matricula-duplicada` |
+| `SinCupoDisponibleException` | 409 | `.../problems/sin-cupo-disponible` |
+| `ReglaNegocioException` (resto de reglas) | 422 | `.../problems/regla-negocio` |
+| `@Valid` rechaza el DTO (`MethodArgumentNotValidException`) | 400 | `.../problems/validacion` |
+| Parámetro con tipo inválido, p. ej. `GET /api/v1/cursos/abc` | 400 | `.../problems/parametro-invalido` |
+| Cualquier otra excepción no prevista | 500 | `.../problems/error-interno` |
+
+El último caso es la red de seguridad: nunca devuelve `ex.getMessage()` ni la
+traza real, solo confirma que algo falló — así se cumple "ninguna traza
+expuesta" incluso para errores que ningún handler específico contempló.
 
 ### Verificación de que ninguna entidad cruza la frontera
 
@@ -465,6 +517,51 @@ método público de ningún controlador recibe ni devuelve `Curso`, `Matricula`,
 ```bash
 grep -rn "Curso \|Matricula \|Usuario \|Leccion \|Pago " src/main/java/cr/ac/una/lab1/presentation/
 ```
+
+---
+
+## Colecciones: paginación, orden y filtros (Laboratorio 5)
+
+`GET /api/v1/cursos` y `GET /api/v1/matriculas` son colecciones paginadas, no
+listas completas: reciben un `Pageable` (`?page=&size=&sort=`) que Spring
+resuelve automáticamente, y delegan el filtrado a las Specifications que ya
+existían desde el Laboratorio 3
+([`CursoSpecification`](src/main/java/cr/ac/una/lab1/data/specification/CursoSpecification.java),
+[`MatriculaSpecification`](src/main/java/cr/ac/una/lab1/data/specification/MatriculaSpecification.java))
+— `CursoService.buscar(...)`/`MatriculaService.buscar(...)` arman la
+`Specification` a partir de los parámetros no nulos y le piden al repositorio
+`findAll(spec, pageable)` (ya disponible porque `BaseRepository` extiende
+`JpaSpecificationExecutor`), y mapean la `Page<Entidad>` resultante a
+`Page<DTO>` con `.map(...)` sin perder los metadatos de paginación.
+
+**Cursos** — filtros: `texto` (nombre o código), `nivel`, `precioMax`,
+`publicado`, `fechaInicioDespuesDe`.
+
+```bash
+curl "http://localhost:8080/api/v1/cursos?nivel=BASICO&precioMax=50000&sort=precio,asc&page=0&size=5"
+```
+
+**Matrículas** — filtros: `usuarioId`, `cursoId`, `estado`, `fechaDesde`,
+`fechaHasta`, `precioFinalMin`, `precioFinalMax`.
+
+```bash
+curl "http://localhost:8080/api/v1/matriculas?cursoId=1&estado=ACTIVA&sort=fecha,desc"
+```
+```json
+{
+  "content": [
+    {"matriculaId":1,"consecutivo":"MAT-2026-000001","estudianteId":4,"nombreEstudiante":"Luis Fernández Rojas","cursoId":1,"codigoCurso":"LESCO-101","estadoMatricula":"ACTIVA", "...": "..."}
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "number": 0,
+  "size": 10
+}
+```
+
+Todos los filtros son opcionales e independientes entre sí (combinados con
+`AND` dentro de la Specification), así que se pueden mezclar libremente, por
+ejemplo `?cursoId=1&estado=ACTIVA&precioFinalMin=40000`.
 
 ---
 
@@ -484,12 +581,12 @@ de datos — por eso corren en milisegundos.
 
 (`./gradlew test` a secas corre además las de Testcontainers, que si necesitan Docker arriba.)
 
-### 31 pruebas unitarias, organizadas por clase
+### 42 pruebas unitarias, organizadas por clase
 
 | Clase | Qué cubre | # |
 |---|---|---|
-| [`MatriculaServiceTest`](src/test/java/cr/ac/una/lab1/business/MatriculaServiceTest.java) | `matricular()`: camino feliz + 9 caminos de regla (estudiante/curso/lección inexistentes, curso no publicado, lección de otro curso, sin cupo, ya matriculado, método de pago no soportado, Strategy que rechaza la referencia). `aprobarPago()`/`cancelarMatricula()`: las 6 transiciones del patrón State (PENDIENTE/ACTIVA/CANCELADA × activar/cancelar), incluyendo `matriculaId` inexistente. | 18 |
-| [`CursoServiceTest`](src/test/java/cr/ac/una/lab1/business/CursoServiceTest.java) | `listarCatalogoPublico()`: cálculo de `cuposDisponibles`/`precioFinal`. `publicarCurso()`: camino feliz + 3 caminos de regla (curso inexistente, ya publicado, sin lecciones). | 5 |
+| [`MatriculaServiceTest`](src/test/java/cr/ac/una/lab1/business/MatriculaServiceTest.java) | `matricular()`: camino feliz + caminos de regla (estudiante/curso/lección inexistentes, curso no publicado, lección de otro curso, sin cupo, ya matriculado, método de pago no soportado, Strategy que rechaza la referencia). `aprobarPago()`/`cancelarMatricula()`: las 6 transiciones del patrón State, re-chequeo de cupo al aprobar, y que el `Pago` quede `APROBADO`. `obtenerPorId()`/`buscar()` (Lab 5): lectura por id y colección paginada+filtrada vía `MatriculaSpecification`. | 22 |
+| [`CursoServiceTest`](src/test/java/cr/ac/una/lab1/business/CursoServiceTest.java) | `listarCatalogoPublico()`: cálculo de `cuposDisponibles`/`precioFinal`. `publicarCurso()`: camino feliz + las 6 reglas de publicación (curso inexistente, ya publicado, fechas incoherentes, código duplicado, sin lecciones, lección sin instructor, sin recurso multimedia). `obtenerPorId()`/`buscar()` (Lab 5): lectura por id y colección paginada+filtrada vía `CursoSpecification`. | 12 |
 | [`ValidadorSinpeMovilTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorSinpeMovilTest.java) | Formato de referencia SINPE (8 dígitos, nula, inválida). | 3 |
 | [`ValidadorTransferenciaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTransferenciaTest.java) | Formato de referencia de transferencia (alfanumérica 6-30, vacía, con espacios). | 3 |
 | [`ValidadorTarjetaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTarjetaTest.java) | TARJETA nunca exige referencia al matricular. | 2 |
@@ -511,6 +608,6 @@ así que **el build falla si la cobertura del paquete de negocio baja de 70%**:
 ./gradlew jacocoTestCoverageVerification --tests "cr.ac.una.lab1.business.*"
 ```
 
-Resultado actual: **163 de 165 líneas cubiertas (98.8%)** — el reporte HTML
+Resultado actual: **201 de 203 líneas cubiertas (99%)** — el reporte HTML
 completo queda en `build/reports/jacoco/test/html/index.html` después de correr
 `./gradlew test`.

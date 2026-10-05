@@ -21,10 +21,15 @@ import cr.ac.una.lab1.data.LeccionRepository;
 import cr.ac.una.lab1.data.RolUsuario;
 import cr.ac.una.lab1.data.Usuario;
 import cr.ac.una.lab1.data.UsuarioRepository;
+import cr.ac.una.lab1.data.specification.MatriculaSpecification;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -164,6 +169,34 @@ public class MatriculaService {
         pago = pagoRepository.save(pago);
 
         return toResponseDTO(matricula, curso, pago);
+    }
+
+    // -----------------------------------------------------------------------
+    // Lectura
+    // -----------------------------------------------------------------------
+
+    /** Una matrícula por id. Lanza {@link EntidadNoEncontradaException} (404) si no existe. */
+    @Transactional(readOnly = true)
+    public MatriculaResponseDTO obtenerPorId(Long id) {
+        Matricula m = obtenerMatricula(id);
+        return toResponseDTO(m, m.getCurso(), m.getPago());
+    }
+
+    /**
+     * Colección paginada y filtrable de matrículas (patrón Specification, ver
+     * {@link MatriculaSpecification}). Todos los filtros son opcionales; el
+     * orden y el tamaño de página los resuelve Spring a partir de
+     * {@code pageable} ({@code ?page=&size=&sort=}).
+     */
+    @Transactional(readOnly = true)
+    public Page<MatriculaResponseDTO> buscar(
+            Long usuarioId, Long cursoId, EstadoMatricula estado,
+            OffsetDateTime fechaDesde, OffsetDateTime fechaHasta,
+            BigDecimal precioFinalMin, BigDecimal precioFinalMax, Pageable pageable) {
+        Specification<Matricula> filtros = MatriculaSpecification.conFiltros(
+                usuarioId, cursoId, estado, fechaDesde, fechaHasta, precioFinalMin, precioFinalMax);
+        return matriculaRepository.findAll(filtros, pageable)
+                .map(m -> toResponseDTO(m, m.getCurso(), m.getPago()));
     }
 
     // -----------------------------------------------------------------------

@@ -2,7 +2,9 @@ package cr.ac.una.lab1.business;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +29,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /*
@@ -237,5 +244,43 @@ class CursoServiceTest {
         assertThatThrownBy(() -> service.publicarCurso(3L, REQ))
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("recursos multimedia");
+    }
+
+    // -----------------------------------------------------------------------
+    // obtenerPorId() / buscar() — Laboratorio 5: lectura por id y colección paginada
+    // -----------------------------------------------------------------------
+
+    @Test
+    void obtenerPorId_existente_retornaDTO() {
+        Curso curso = cursoNoPublicado();
+        when(cursoRepository.findById(3L)).thenReturn(Optional.of(curso));
+        when(matriculaRepository.findByCursoIdAndEstado(3L, EstadoMatricula.ACTIVA)).thenReturn(List.of());
+
+        CursoCatalogoDTO dto = service.obtenerPorId(3L);
+
+        assertThat(dto.codigo()).isEqualTo("LESCO-201");
+    }
+
+    @Test
+    void obtenerPorId_noExiste_lanzaEntidadNoEncontrada() {
+        when(cursoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.obtenerPorId(99L))
+                .isInstanceOf(EntidadNoEncontradaException.class);
+    }
+
+    @Test
+    void buscar_delegaEnLaSpecificationYMapeaLaPagina() {
+        Curso curso = cursoNoPublicado();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Curso> pagina = new PageImpl<>(List.of(curso), pageable, 1);
+
+        when(cursoRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(pagina);
+        when(matriculaRepository.findByCursoIdAndEstado(3L, EstadoMatricula.ACTIVA)).thenReturn(List.of());
+
+        Page<CursoCatalogoDTO> resultado = service.buscar(null, "AVANZADO", null, false, null, pageable);
+
+        assertThat(resultado.getTotalElements()).isEqualTo(1);
+        assertThat(resultado.getContent().get(0).codigo()).isEqualTo("LESCO-201");
     }
 }

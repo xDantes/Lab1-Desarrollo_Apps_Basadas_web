@@ -3,6 +3,7 @@ package cr.ac.una.lab1.business;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +40,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -360,5 +366,45 @@ class MatriculaServiceTest {
 
         assertThatThrownBy(() -> service.cancelarMatricula(1L))
                 .isInstanceOf(CambioEstadoInvalidoException.class);
+    }
+
+    // -----------------------------------------------------------------------
+    // obtenerPorId() / buscar() — Laboratorio 5: lectura por id y colección paginada
+    // -----------------------------------------------------------------------
+
+    @Test
+    void obtenerPorId_existente_retornaDTO() {
+        Matricula matricula = matriculaPersistida(EstadoMatricula.ACTIVA);
+        ReflectionTestUtils.setField(matricula, "curso", curso);
+        when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+
+        MatriculaResponseDTO dto = service.obtenerPorId(1L);
+
+        assertThat(dto.consecutivo()).isEqualTo("MAT-2026-000001");
+        assertThat(dto.codigoCurso()).isEqualTo("LESCO-101");
+    }
+
+    @Test
+    void obtenerPorId_noExiste_lanzaEntidadNoEncontrada() {
+        when(matriculaRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.obtenerPorId(1L))
+                .isInstanceOf(EntidadNoEncontradaException.class);
+    }
+
+    @Test
+    void buscar_delegaEnLaSpecificationYMapeaLaPagina() {
+        Matricula matricula = matriculaPersistida(EstadoMatricula.ACTIVA);
+        ReflectionTestUtils.setField(matricula, "curso", curso);
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Matricula> pagina = new PageImpl<>(List.of(matricula), pageable, 1);
+
+        when(matriculaRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(pagina);
+
+        Page<MatriculaResponseDTO> resultado = service.buscar(
+                4L, null, EstadoMatricula.ACTIVA, null, null, null, null, pageable);
+
+        assertThat(resultado.getTotalElements()).isEqualTo(1);
+        assertThat(resultado.getContent().get(0).consecutivo()).isEqualTo("MAT-2026-000001");
     }
 }
