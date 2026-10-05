@@ -1,8 +1,11 @@
 package cr.ac.una.lab1.business;
 
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
+import cr.ac.una.lab1.business.exception.CursoNoPublicadoException;
 import cr.ac.una.lab1.business.exception.EntidadNoEncontradaException;
+import cr.ac.una.lab1.business.exception.MatriculaDuplicadaException;
 import cr.ac.una.lab1.business.exception.ReglaNegocioException;
+import cr.ac.una.lab1.business.exception.SinCupoDisponibleException;
 import cr.ac.una.lab1.business.strategy.ValidadorMetodoPago;
 import cr.ac.una.lab1.data.Curso;
 import cr.ac.una.lab1.data.EstadoMatricula;
@@ -103,8 +106,7 @@ public class MatriculaService {
         Curso curso = cursoRepository.findById(dto.cursoId())
                 .orElseThrow(() -> new EntidadNoEncontradaException("Curso", dto.cursoId()));
         if (!curso.isPublicado()) {
-            throw new ReglaNegocioException(
-                    "El curso '" + curso.getCodigo() + "' no está publicado.");
+            throw new CursoNoPublicadoException(curso.getCodigo());
         }
 
         // Paso 3: validar lección perteneciente al curso
@@ -120,8 +122,7 @@ public class MatriculaService {
                 .findByCursoIdAndEstado(curso.getId(), EstadoMatricula.ACTIVA).size();
         int cuposDisponibles = curso.getCupoTotal() - matriculasActivas;
         if (cuposDisponibles <= 0) {
-            throw new ReglaNegocioException(
-                    "El curso '" + curso.getCodigo() + "' no tiene cupo disponible.");
+            throw new SinCupoDisponibleException(curso.getCodigo());
         }
 
         // Paso 5: verificar que no haya matrícula vigente del mismo estudiante en el mismo curso
@@ -137,8 +138,7 @@ public class MatriculaService {
                     .anyMatch(m -> m.getUsuario().getId().equals(estudiante.getId()));
         }
         if (yaMatriculado) {
-            throw new ReglaNegocioException(
-                    "El estudiante ya tiene una matrícula vigente en el curso '" + curso.getCodigo() + "'.");
+            throw new MatriculaDuplicadaException(curso.getCodigo());
         }
 
         // Paso 6: validar referencia de pago (patrón Strategy)
@@ -172,16 +172,40 @@ public class MatriculaService {
 
     /**
      * Aprueba el pago: transición PENDIENTE → ACTIVA.
-     * Delega a {@link Matricula#activar()}; lanza {@link CambioEstadoInvalidoException}
-     * si la transición no es válida.
+     *
+     * <p>Antes de activar, vuelve a verificar el cupo del curso: la matrícula
+     * pudo haber quedado PENDIENTE mucho antes de que se aprobara su pago, y
+     * mientras tanto el cupo pudo haberse agotado con otras matrículas que sí
+     * se activaron primero. Si ya no hay cupo, lanza
+     * {@link SinCupoDisponibleException} y la matrícula se queda en PENDIENTE
+     * (no queda "a medias": nunca llega a tocar el estado ni el pago).
+     *
+     * <p>Delega la transición a {@link Matricula#activar()}, que lanza
+     * {@link CambioEstadoInvalidoException} si no es válida (p. ej. ya estaba
+     * ACTIVA o CANCELADA). Si todo lo anterior pasa, también marca el
+     * {@link Pago} asociado como {@code APROBADO} — antes este método activaba
+     * la matrícula pero dejaba el pago en PENDIENTE para siempre.
      */
     @Transactional
     public MatriculaResponseDTO aprobarPago(Long matriculaId) {
         Matricula matricula = obtenerMatricula(matriculaId);
-        matricula.activar(); // patrón State valida la transición
-        Pago pago = pagoRepository.findByMatriculaId(matriculaId).orElse(null);
         // Dentro de @Transactional el proxy LAZY de leccion.getCurso() es inicializable.
         Curso curso = matricula.getLeccion().getCurso();
+
+        int matriculasActivas = matriculaRepository
+                .findByCursoIdAndEstado(curso.getId(), EstadoMatricula.ACTIVA).size();
+        if (curso.getCupoTotal() - matriculasActivas <= 0) {
+            throw new SinCupoDisponibleException(curso.getCodigo());
+        }
+
+        matricula.activar(); // patrón State valida la transición
+
+        Pago pago = pagoRepository.findByMatriculaId(matriculaId).orElse(null);
+        if (pago != null) {
+            pago.aprobar();
+            pagoRepository.save(pago);
+        }
+
         return toResponseDTO(matriculaRepository.save(matricula), curso, pago);
     }
 

@@ -60,6 +60,17 @@ public class Pago {
         this.estado = estado;
     }
 
+    /**
+     * Marca el pago como aprobado. No valida el estado anterior: la única
+     * forma de llegar aquí es {@code MatriculaService#aprobarPago}, que ya
+     * exige que la propia {@link Matricula} esté en PENDIENTE (vía el patrón
+     * State) antes de tocar el pago, así que un doble llamado ya queda
+     * bloqueado en ese nivel.
+     */
+    public void aprobar() {
+        this.estado = EstadoPago.APROBADO;
+    }
+
     public Long getId() {
         return id;
     }

@@ -8,12 +8,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
+import cr.ac.una.lab1.business.exception.CursoNoPublicadoException;
 import cr.ac.una.lab1.business.exception.EntidadNoEncontradaException;
+import cr.ac.una.lab1.business.exception.MatriculaDuplicadaException;
 import cr.ac.una.lab1.business.exception.ReglaNegocioException;
+import cr.ac.una.lab1.business.exception.SinCupoDisponibleException;
 import cr.ac.una.lab1.business.strategy.ValidadorMetodoPago;
 import cr.ac.una.lab1.data.Curso;
 import cr.ac.una.lab1.data.CursoRepository;
 import cr.ac.una.lab1.data.EstadoMatricula;
+import cr.ac.una.lab1.data.EstadoPago;
 import cr.ac.una.lab1.data.Leccion;
 import cr.ac.una.lab1.data.LeccionRepository;
 import cr.ac.una.lab1.data.Matricula;
@@ -147,7 +151,7 @@ class MatriculaServiceTest {
     }
 
     @Test
-    void matricular_cursoNoPublicado_lanzaReglaNegocio() {
+    void matricular_cursoNoPublicado_lanzaCursoNoPublicado() {
         Curso cursoSinPublicar = new Curso("LESCO-201", "LESCO Laboral", "desc", "AVANZADO", 12,
                 new BigDecimal("60000.00"), new BigDecimal("15"),
                 LocalDate.of(2026, 10, 5), LocalDate.of(2027, 1, 11), false);
@@ -157,7 +161,7 @@ class MatriculaServiceTest {
         when(cursoRepository.findById(1L)).thenReturn(Optional.of(cursoSinPublicar));
 
         assertThatThrownBy(() -> service.matricular(dtoTarjeta()))
-                .isInstanceOf(ReglaNegocioException.class)
+                .isInstanceOf(CursoNoPublicadoException.class)
                 .hasMessageContaining("no está publicado");
     }
 
@@ -190,7 +194,7 @@ class MatriculaServiceTest {
     }
 
     @Test
-    void matricular_sinCupoDisponible_lanzaReglaNegocio() {
+    void matricular_sinCupoDisponible_lanzaSinCupoDisponible() {
         when(usuarioRepository.findById(4L)).thenReturn(Optional.of(estudiante));
         when(cursoRepository.findById(1L)).thenReturn(Optional.of(curso));
         when(leccionRepository.findById(1L)).thenReturn(Optional.of(leccion));
@@ -199,12 +203,12 @@ class MatriculaServiceTest {
                 .thenReturn(Collections.nCopies(20, mock(Matricula.class)));
 
         assertThatThrownBy(() -> service.matricular(dtoTarjeta()))
-                .isInstanceOf(ReglaNegocioException.class)
+                .isInstanceOf(SinCupoDisponibleException.class)
                 .hasMessageContaining("no tiene cupo disponible");
     }
 
     @Test
-    void matricular_estudianteYaTieneMatriculaVigenteEnElCurso_lanzaReglaNegocio() {
+    void matricular_estudianteYaTieneMatriculaVigenteEnElCurso_lanzaMatriculaDuplicada() {
         Matricula matriculaExistente = new Matricula("MAT-2026-000001", estudiante, leccion,
                 EstadoMatricula.ACTIVA, new BigDecimal("45000.00"));
 
@@ -215,7 +219,7 @@ class MatriculaServiceTest {
                 .thenReturn(List.of(matriculaExistente));
 
         assertThatThrownBy(() -> service.matricular(dtoTarjeta()))
-                .isInstanceOf(ReglaNegocioException.class)
+                .isInstanceOf(MatriculaDuplicadaException.class)
                 .hasMessageContaining("ya tiene una matrícula vigente");
     }
 
@@ -261,15 +265,36 @@ class MatriculaServiceTest {
     }
 
     @Test
-    void aprobarPago_desdePendiente_transicionaAActiva() {
+    void aprobarPago_desdePendiente_transicionaAActivaYApruebaElPago() {
         Matricula matricula = matriculaPersistida(EstadoMatricula.PENDIENTE);
+        Pago pago = new Pago(matricula, new BigDecimal("45000.00"), MetodoPago.TARJETA, null, EstadoPago.PENDIENTE);
+
         when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
-        when(pagoRepository.findByMatriculaId(1L)).thenReturn(Optional.empty());
+        when(matriculaRepository.findByCursoIdAndEstado(1L, EstadoMatricula.ACTIVA)).thenReturn(List.of());
+        when(pagoRepository.findByMatriculaId(1L)).thenReturn(Optional.of(pago));
         when(matriculaRepository.save(matricula)).thenReturn(matricula);
 
         MatriculaResponseDTO resultado = service.aprobarPago(1L);
 
         assertThat(resultado.estadoMatricula()).isEqualTo(EstadoMatricula.ACTIVA);
+        assertThat(pago.getEstado()).isEqualTo(EstadoPago.APROBADO);
+        verify(pagoRepository).save(pago);
+    }
+
+    @Test
+    void aprobarPago_sinCupoDisponible_lanzaSinCupoDisponibleYNoActiva() {
+        Matricula matricula = matriculaPersistida(EstadoMatricula.PENDIENTE);
+        when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+        // curso.cupoTotal = 20: el cupo se agotó mientras la matrícula estaba PENDIENTE.
+        when(matriculaRepository.findByCursoIdAndEstado(1L, EstadoMatricula.ACTIVA))
+                .thenReturn(Collections.nCopies(20, mock(Matricula.class)));
+
+        assertThatThrownBy(() -> service.aprobarPago(1L))
+                .isInstanceOf(SinCupoDisponibleException.class);
+
+        assertThat(matricula.getEstado())
+                .as("si no hay cupo, la matrícula debe quedarse en PENDIENTE")
+                .isEqualTo(EstadoMatricula.PENDIENTE);
     }
 
     @Test
@@ -284,6 +309,7 @@ class MatriculaServiceTest {
     void aprobarPago_desdeActiva_lanzaCambioEstadoInvalido() {
         Matricula matricula = matriculaPersistida(EstadoMatricula.ACTIVA);
         when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+        when(matriculaRepository.findByCursoIdAndEstado(1L, EstadoMatricula.ACTIVA)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.aprobarPago(1L))
                 .isInstanceOf(CambioEstadoInvalidoException.class);
@@ -293,6 +319,7 @@ class MatriculaServiceTest {
     void aprobarPago_desdeCancelada_lanzaCambioEstadoInvalido() {
         Matricula matricula = matriculaPersistida(EstadoMatricula.CANCELADA);
         when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+        when(matriculaRepository.findByCursoIdAndEstado(1L, EstadoMatricula.ACTIVA)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.aprobarPago(1L))
                 .isInstanceOf(CambioEstadoInvalidoException.class);

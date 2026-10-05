@@ -18,6 +18,16 @@ de modo que la `Matricula` misma rechaza cualquier transición ilegal lanzando
 `CambioEstadoInvalidoException`, sin importar desde qué servicio o capa se intente;
 así la regla de ciclo de vida vive en un único lugar concreto y no puede ser ignorada.
 
+**Nota posterior:** el riesgo descrito arriba (`matricula.setEstado(ACTIVA)` directo)
+existía literalmente mientras `Matricula` expusiera ese setter como público — el
+patrón State por sí solo no lo impedía, solo ofrecía el camino correcto en paralelo.
+Se corrigió cambiando la firma de `MatriculaEstado`: las implementaciones
+(`EstadoPendiente`/`EstadoActiva`/`EstadoCancelada`) ya no reciben la `Matricula` y
+la mutan, sino que devuelven el siguiente `EstadoMatricula` (o lanzan la excepción);
+`Matricula.activar()`/`cancelar()` son las únicas que asignan `this.estado`. Ya no
+existe ningún setter público: el patrón State es el único camino posible, no solo
+el recomendado.
+
 ---
 
 ## 2. Patrón Strategy — Validación del método de pago

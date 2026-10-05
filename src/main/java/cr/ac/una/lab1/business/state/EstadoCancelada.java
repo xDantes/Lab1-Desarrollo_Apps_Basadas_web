@@ -2,7 +2,6 @@ package cr.ac.una.lab1.business.state;
 
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
 import cr.ac.una.lab1.data.EstadoMatricula;
-import cr.ac.una.lab1.data.Matricula;
 
 /**
  * Estado CANCELADA: estado terminal del ciclo de vida de una matrícula.
@@ -17,12 +16,12 @@ public class EstadoCancelada implements MatriculaEstado {
     private EstadoCancelada() {}
 
     @Override
-    public void activar(Matricula matricula) {
+    public EstadoMatricula activar() {
         throw new CambioEstadoInvalidoException(EstadoMatricula.CANCELADA, "activar");
     }
 
     @Override
-    public void cancelar(Matricula matricula) {
+    public EstadoMatricula cancelar() {
         throw new CambioEstadoInvalidoException(EstadoMatricula.CANCELADA, "cancelar");
     }
 }
