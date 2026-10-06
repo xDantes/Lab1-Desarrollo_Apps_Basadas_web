@@ -65,6 +65,10 @@ public class Usuario {
         return correo;
     }
 
+    public String getContrasenaHash() {
+        return contrasenaHash;
+    }
+
     public RolUsuario getRol() {
         return rol;
     }

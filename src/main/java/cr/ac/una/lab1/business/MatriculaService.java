@@ -1,5 +1,6 @@
 package cr.ac.una.lab1.business;
 
+import cr.ac.una.lab1.business.exception.AccesoNoAutorizadoException;
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
 import cr.ac.una.lab1.business.exception.CursoNoPublicadoException;
 import cr.ac.una.lab1.business.exception.EntidadNoEncontradaException;
@@ -171,6 +172,30 @@ public class MatriculaService {
         return toResponseDTO(matricula, curso, pago);
     }
 
+    /**
+     * Versión con verificación de propiedad (OWASP API1).
+     * Llamada desde el controlador HTTP con el correo extraído del JWT.
+     *
+     * <p>Si el rol no es ADMINISTRADOR, verifica que {@code dto.estudianteId()}
+     * corresponda al usuario autenticado. Esto evita que un ESTUDIANTE se
+     * matricule en nombre de otro usuario.
+     */
+    @Transactional
+    public MatriculaResponseDTO matricular(MatriculaRequestDTO dto,
+                                           String correoAutenticado,
+                                           boolean esAdmin) {
+        // OWASP API1: verificación de propiedad antes de los pasos de negocio
+        if (!esAdmin) {
+            usuarioRepository.findByCorreo(correoAutenticado).ifPresent(autenticado -> {
+                if (!autenticado.getId().equals(dto.estudianteId())) {
+                    throw new AccesoNoAutorizadoException(
+                            "Un estudiante solo puede matricularse a sí mismo (OWASP API1).");
+                }
+            });
+        }
+        return matricular(dto);
+    }
+
     // -----------------------------------------------------------------------
     // Lectura
     // -----------------------------------------------------------------------
@@ -251,6 +276,32 @@ public class MatriculaService {
     public MatriculaResponseDTO cancelarMatricula(Long matriculaId) {
         Matricula matricula = obtenerMatricula(matriculaId);
         matricula.cancelar(); // patrón State valida la transición
+        Pago pago = pagoRepository.findByMatriculaId(matriculaId).orElse(null);
+        Curso curso = matricula.getLeccion().getCurso();
+        return toResponseDTO(matriculaRepository.save(matricula), curso, pago);
+    }
+
+    /**
+     * Versión con verificación de propiedad (OWASP API1).
+     * Llamada desde el controlador HTTP con el correo del usuario autenticado.
+     *
+     * <p>Un ESTUDIANTE solo puede cancelar sus propias matrículas.
+     * Un ADMINISTRADOR puede cancelar cualquier matrícula.
+     */
+    @Transactional
+    public MatriculaResponseDTO cancelarMatricula(Long matriculaId,
+                                                  String correoAutenticado,
+                                                  boolean esAdmin) {
+        Matricula matricula = obtenerMatricula(matriculaId);
+
+        // OWASP API1: verificación de propiedad del recurso
+        if (!esAdmin
+                && !matricula.getUsuario().getCorreo().equals(correoAutenticado)) {
+            throw new AccesoNoAutorizadoException(
+                    "Un estudiante solo puede cancelar sus propias matrículas (OWASP API1).");
+        }
+
+        matricula.cancelar();
         Pago pago = pagoRepository.findByMatriculaId(matriculaId).orElse(null);
         Curso curso = matricula.getLeccion().getCurso();
         return toResponseDTO(matriculaRepository.save(matricula), curso, pago);
