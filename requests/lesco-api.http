@@ -1,0 +1,191 @@
+### LESCO CR API — Colección de peticiones HTTP
+### Compatible con IntelliJ IDEA HTTP Client y VS Code REST Client
+### Variables: ajusta @host y @token según tu entorno
+
+@host = http://localhost:8080
+
+###
+# ──────────────────────────────────────────────────
+# 1. AUTENTICACIÓN
+# ──────────────────────────────────────────────────
+
+### 1.1 Login como Administrador
+# @name loginAdmin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "correo": "ana.administradora@lescocr.cr",
+  "contrasena": "Admin1234!"
+}
+
+### 1.2 Login como Estudiante
+# @name loginEstudiante
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "correo": "luis.estudiante@lescocr.cr",
+  "contrasena": "Student1234!"
+}
+
+### 1.3 Login con credenciales incorrectas → 422
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "correo": "no-existe@lescocr.cr",
+  "contrasena": "wrong"
+}
+
+### 1.4 Login con cuerpo inválido (sin correo) → 400
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "contrasena": "Admin1234!"
+}
+
+###
+# ──────────────────────────────────────────────────
+# 2. CATÁLOGO DE CURSOS (público)
+# ──────────────────────────────────────────────────
+
+### 2.1 Listar catálogo público → 200 (sin token)
+GET {{host}}/api/cursos
+
+### 2.2 Publicar curso LESCO-201 (requiere token ADMINISTRADOR)
+# Reemplaza <ADMIN_TOKEN> con el token del paso 1.1
+POST {{host}}/api/cursos/3/publicar
+Content-Type: application/json
+Authorization: Bearer <ADMIN_TOKEN>
+
+{
+  "administradorId": 1
+}
+
+### 2.3 Publicar curso sin token → 401
+POST {{host}}/api/cursos/3/publicar
+Content-Type: application/json
+
+{
+  "administradorId": 1
+}
+
+### 2.4 ESTUDIANTE intenta publicar curso → 403
+POST {{host}}/api/cursos/3/publicar
+Content-Type: application/json
+Authorization: Bearer <STUDENT_TOKEN>
+
+{
+  "administradorId": 1
+}
+
+###
+# ──────────────────────────────────────────────────
+# 3. MATRÍCULAS
+# ──────────────────────────────────────────────────
+
+### 3.1 Crear matrícula (ESTUDIANTE, TARJETA) → 201
+POST {{host}}/api/v1/matriculas
+Content-Type: application/json
+Authorization: Bearer <STUDENT_TOKEN>
+
+{
+  "estudianteId": 4,
+  "cursoId": 1,
+  "leccionId": 1,
+  "metodoPago": "TARJETA",
+  "referencia": null
+}
+
+### 3.2 Crear matrícula con SINPE válido (8 dígitos) → 201
+POST {{host}}/api/v1/matriculas
+Content-Type: application/json
+Authorization: Bearer <STUDENT_TOKEN>
+
+{
+  "estudianteId": 4,
+  "cursoId": 2,
+  "leccionId": 3,
+  "metodoPago": "SINPE_MOVIL",
+  "referencia": "88001234"
+}
+
+### 3.3 Matrícula con referencia SINPE inválida → 422
+POST {{host}}/api/v1/matriculas
+Content-Type: application/json
+Authorization: Bearer <STUDENT_TOKEN>
+
+{
+  "estudianteId": 4,
+  "cursoId": 2,
+  "leccionId": 3,
+  "metodoPago": "SINPE_MOVIL",
+  "referencia": "ABCDEFGH"
+}
+
+### 3.4 Matrícula sin token → 401
+POST {{host}}/api/v1/matriculas
+Content-Type: application/json
+
+{
+  "estudianteId": 4,
+  "cursoId": 1,
+  "leccionId": 1,
+  "metodoPago": "TARJETA"
+}
+
+### 3.5 Matrícula con cuerpo inválido (sin metodoPago) → 400
+POST {{host}}/api/v1/matriculas
+Content-Type: application/json
+Authorization: Bearer <STUDENT_TOKEN>
+
+{
+  "estudianteId": 4,
+  "cursoId": 1,
+  "leccionId": 1
+}
+
+### 3.6 Listar matrículas (paginado) → 200
+GET {{host}}/api/v1/matriculas?page=0&size=10&sort=fecha,desc
+Authorization: Bearer <ADMIN_TOKEN>
+
+### 3.7 Listar matrículas filtradas por estado ACTIVA → 200
+GET {{host}}/api/v1/matriculas?estado=ACTIVA
+Authorization: Bearer <ADMIN_TOKEN>
+
+### 3.8 Obtener matrícula por ID → 200
+GET {{host}}/api/v1/matriculas/1
+Authorization: Bearer <ADMIN_TOKEN>
+
+### 3.9 Obtener matrícula inexistente → 404
+GET {{host}}/api/v1/matriculas/99999
+Authorization: Bearer <ADMIN_TOKEN>
+
+### 3.10 Aprobar pago de matrícula (ADMINISTRADOR) → 204
+POST {{host}}/api/v1/matriculas/2/aprobar
+Authorization: Bearer <ADMIN_TOKEN>
+
+### 3.11 ESTUDIANTE intenta aprobar → 403
+POST {{host}}/api/v1/matriculas/2/aprobar
+Authorization: Bearer <STUDENT_TOKEN>
+
+### 3.12 Cancelar matrícula propia (ESTUDIANTE) → 204
+POST {{host}}/api/v1/matriculas/2/cancelar
+Authorization: Bearer <STUDENT_TOKEN>
+
+### 3.13 Cancelar matrícula ajena (OWASP API1) → 403
+POST {{host}}/api/v1/matriculas/1/cancelar
+Authorization: Bearer <STUDENT_TOKEN>
+
+###
+# ──────────────────────────────────────────────────
+# 4. SWAGGER UI / OpenAPI
+# ──────────────────────────────────────────────────
+
+### 4.1 Especificación OpenAPI en JSON → 200 (sin token)
+GET {{host}}/v3/api-docs
+
+### 4.2 Swagger UI (redirect a HTML) → 302/200
+GET {{host}}/swagger-ui.html

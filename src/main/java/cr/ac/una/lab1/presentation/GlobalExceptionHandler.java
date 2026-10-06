@@ -1,5 +1,6 @@
 package cr.ac.una.lab1.presentation;
 
+import cr.ac.una.lab1.business.exception.AccesoNoAutorizadoException;
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
 import cr.ac.una.lab1.business.exception.EntidadNoEncontradaException;
 import cr.ac.una.lab1.business.exception.MatriculaDuplicadaException;
@@ -36,6 +37,15 @@ class GlobalExceptionHandler {
     @ExceptionHandler(EntidadNoEncontradaException.class)
     ProblemDetail handleEntidadNoEncontrada(EntidadNoEncontradaException ex) {
         return problema(HttpStatus.NOT_FOUND, "Entidad no encontrada", "entidad-no-encontrada", ex.getMessage());
+    }
+
+    /**
+     * 403 — un ESTUDIANTE intentó operar sobre un recurso que no le pertenece
+     * (verificación de propiedad del recurso, OWASP API1).
+     */
+    @ExceptionHandler(AccesoNoAutorizadoException.class)
+    ProblemDetail handleAccesoNoAutorizado(AccesoNoAutorizadoException ex) {
+        return problema(HttpStatus.FORBIDDEN, "Acceso denegado", "acceso-no-autorizado", ex.getMessage());
     }
 
     /** 409 — se intentó una transición de estado que el ciclo de vida no permite (patrón State). */
