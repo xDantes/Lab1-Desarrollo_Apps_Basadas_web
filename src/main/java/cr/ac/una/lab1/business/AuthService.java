@@ -45,13 +45,13 @@ public class AuthService {
             Authentication auth = authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(dto.correo(), dto.contrasena()));
 
-            // Recuperamos el rol desde la BD para incluirlo en el token y el DTO
-            String rol = usuarioRepository.findByCorreo(dto.correo())
-                    .map(u -> u.getRol().name())
+            // Recuperamos el usuario desde la BD para incluir rol, id y nombre en la respuesta
+            var usuario = usuarioRepository.findByCorreo(dto.correo())
                     .orElseThrow(() -> new ReglaNegocioException("Usuario no encontrado."));
 
+            String rol = usuario.getRol().name();
             String token = tokenProvider.generarToken(auth.getName(), rol);
-            return new LoginResponseDTO(token, auth.getName(), rol);
+            return new LoginResponseDTO(token, "Bearer", auth.getName(), rol, usuario.getId(), usuario.getNombre());
 
         } catch (AuthenticationException e) {
             // No exponemos si el correo no existe vs. contraseña incorrecta (OWASP API2)
