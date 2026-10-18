@@ -36,5 +36,16 @@ out/
 ### VS Code ###
 .vscode/
 
-### Docker Compose ###
-.env
+### Environment Variables & Secrets ###
+.env*
+!.env.example
+*.local
+
+### Node & React SPA ###
+spa/node_modules/
+spa/dist/
+spa/.env*
+!spa/.env.example
+node_modules/
+dist/
+

@@ -52,6 +52,9 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+    private String allowedOrigins;
+
     public SecurityConfig(JwtAuthenticationFilter jwtFilter, ObjectMapper objectMapper) {
         this.jwtFilter    = jwtFilter;
         this.objectMapper = objectMapper;
@@ -60,16 +63,18 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Público
                 .requestMatchers("/auth/login").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/cursos").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/cursos", "/api/cursos/**",
+                                                  "/api/v1/cursos", "/api/v1/cursos/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**",
                                  "/swagger-ui.html", "/webjars/**").permitAll()
                 // Sólo ADMINISTRADOR
-                .requestMatchers(HttpMethod.POST, "/api/cursos/*/publicar")
+                .requestMatchers(HttpMethod.POST, "/api/cursos/*/publicar", "/api/v1/cursos/*/publicar")
                     .hasRole("ADMINISTRADOR")
                 .requestMatchers(HttpMethod.POST, "/api/v1/matriculas/*/aprobar")
                     .hasRole("ADMINISTRADOR")
@@ -121,6 +126,26 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+        org.springframework.web.cors.CorsConfiguration config = new org.springframework.web.cors.CorsConfiguration();
+        java.util.List<String> origins = java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        config.setAllowedOrigins(origins);
+        config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        config.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        config.setExposedHeaders(java.util.List.of("Authorization", "Location"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        org.springframework.web.cors.UrlBasedCorsConfigurationSource source =
+                new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     private ProblemDetail problemDetail(HttpStatus status, String titulo,
