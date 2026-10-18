@@ -2,10 +2,12 @@ package cr.ac.una.lab1.presentation;
 
 import cr.ac.una.lab1.business.CursoCatalogoDTO;
 import cr.ac.una.lab1.business.CursoService;
+import cr.ac.una.lab1.business.LeccionDTO;
 import cr.ac.una.lab1.business.PublicarCursoRequestDTO;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -19,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/cursos")
+@RequestMapping({"/api/v1/cursos", "/api/cursos"})
 class CursoController {
 
     private final CursoService cursoService; // nunca el repositorio
@@ -53,6 +55,12 @@ class CursoController {
     @GetMapping("/{id}")
     CursoCatalogoDTO obtener(@PathVariable Long id) {
         return cursoService.obtenerPorId(id);
+    }
+
+    /** GET /api/v1/cursos/{id}/lecciones — lista las lecciones de un curso. 404 si el curso no existe. */
+    @GetMapping("/{id}/lecciones")
+    List<LeccionDTO> listarLecciones(@PathVariable Long id) {
+        return cursoService.listarLeccionesPorCurso(id);
     }
 
     /**

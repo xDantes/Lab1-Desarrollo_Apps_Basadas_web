@@ -59,6 +59,17 @@ public class CursoService {
                 .toList();
     }
 
+    /** Lista las lecciones de un curso ordenadas por orden. 404 si el curso no existe. */
+    @Transactional(readOnly = true)
+    public List<LeccionDTO> listarLeccionesPorCurso(Long cursoId) {
+        if (!cursoRepository.existsById(cursoId)) {
+            throw new EntidadNoEncontradaException("Curso", cursoId);
+        }
+        return leccionRepository.findByCursoIdOrderByOrdenAsc(cursoId).stream()
+                .map(l -> new LeccionDTO(l.getId(), l.getOrden(), l.getTitulo()))
+                .toList();
+    }
+
     /** Un curso por id. Lanza {@link EntidadNoEncontradaException} (404) si no existe. */
     @Transactional(readOnly = true)
     public CursoCatalogoDTO obtenerPorId(Long id) {
