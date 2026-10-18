@@ -103,18 +103,18 @@ export default function LoginForm() {
             <button
               type="button"
               className="btn-chip"
-              onClick={() => handleQuickFill('api.student@test.cr', 'Student1234!')}
+              onClick={() => handleQuickFill('luis.estudiante@lescocr.cr', 'Student1234!')}
             >
               <strong>Estudiante</strong>
-              <span>api.student@test.cr</span>
+              <span>luis.estudiante@lescocr.cr</span>
             </button>
             <button
               type="button"
               className="btn-chip"
-              onClick={() => handleQuickFill('api.admin@test.cr', 'Admin1234!')}
+              onClick={() => handleQuickFill('admin@lescocr.cr', 'Admin1234!')}
             >
               <strong>Administrador</strong>
-              <span>api.admin@test.cr</span>
+              <span>admin@lescocr.cr</span>
             </button>
           </div>
         </div>
