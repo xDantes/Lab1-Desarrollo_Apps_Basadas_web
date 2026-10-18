@@ -44,6 +44,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  */
 @Configuration
 @EnableWebSecurity
+@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
@@ -69,23 +70,23 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Público
                 .requestMatchers("/auth/login").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/cursos", "/api/cursos/**",
-                                                  "/api/v1/cursos", "/api/v1/cursos/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/cursos", "/api/v1/cursos/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/instructores", "/api/v1/instructores/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/lecciones", "/api/v1/lecciones/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**",
                                  "/swagger-ui.html", "/webjars/**").permitAll()
                 // Sólo ADMINISTRADOR
-                .requestMatchers(HttpMethod.POST, "/api/cursos/*/publicar", "/api/v1/cursos/*/publicar")
-                    .hasRole("ADMINISTRADOR")
-                .requestMatchers(HttpMethod.POST, "/api/v1/matriculas/*/aprobar")
-                    .hasRole("ADMINISTRADOR")
+                .requestMatchers(HttpMethod.POST, "/api/v1/cursos/*/publicar").hasRole("ADMINISTRADOR")
+                .requestMatchers(HttpMethod.POST, "/api/v1/matriculas/*/aprobar").hasRole("ADMINISTRADOR")
+                .requestMatchers("/api/v1/usuarios/**").hasRole("ADMINISTRADOR")
                 // Sólo ESTUDIANTE
-                .requestMatchers(HttpMethod.POST, "/api/v1/matriculas")
-                    .hasRole("ESTUDIANTE")
+                .requestMatchers(HttpMethod.POST, "/api/v1/matriculas").hasRole("ESTUDIANTE")
                 // ESTUDIANTE o ADMINISTRADOR (ownership check en servicio – OWASP API1)
                 .requestMatchers(HttpMethod.POST, "/api/v1/matriculas/*/cancelar")
                     .hasAnyRole("ESTUDIANTE", "ADMINISTRADOR")
                 // Autenticado (cualquier rol)
                 .requestMatchers("/api/v1/matriculas/**").authenticated()
+                .requestMatchers("/api/v1/pagos/**").authenticated()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

@@ -175,13 +175,13 @@ class ApiSecurityIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(4)
-    @DisplayName("API 403: POST /api/cursos/{id}/publicar — ESTUDIANTE no tiene rol ADMINISTRADOR")
+    @DisplayName("API 403: POST /api/v1/cursos/{id}/publicar — ESTUDIANTE no tiene rol ADMINISTRADOR")
     void test_403_estudianteIntentaPublicar() {
         String body = """
                 {"administradorId":999}
                 """;
         ResponseEntity<String> resp = post(
-                "/api/cursos/" + cursoPublicadoId + "/publicar", body, studentToken);
+                "/api/v1/cursos/" + cursoPublicadoId + "/publicar", body, studentToken);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(resp.getBody()).contains("acceso-denegado");
