@@ -14,6 +14,10 @@ Desarrollado por: Derrek Adrián Ureña Solís y José Arrieta Sancho.
 - [Propuesta de dominio](docs/Propuesta_de_Dominio.pdf) — entidades de negocio, procesos y alcance.
 - [Diagrama de arquitectura previsto](docs/diagrama.md)
 - [ADR-001 · Elección de stack](docs/adr/ADR-001-EleccionStack.md)
+- [Modelo de datos](docs/modelo-datos.md) — esquema PostgreSQL, colecciones MongoDB, justificación embeber/referenciar.
+- [Patrones de diseño](docs/patrones.md) — State y Strategy, con la señal que los justificó.
+- [Guía de despliegue](docs/DESPLIEGUE.md) — servicios gestionados, variables de entorno y diagrama de despliegue.
+- [Módulo MVC con Thymeleaf](#módulo-mvc-con-thymeleaf-laboratorio-6) — vistas con sesión, CSRF y PRG, aparte de la API REST stateless.
 
 ## Requisitos previos
 
@@ -685,6 +689,113 @@ GitHub es mucho peor.
 - El secreto que quedó en el historial de Git ya está comprometido (es
   público) — si este proyecto se llega a desplegar de verdad, generar uno
   nuevo (`openssl rand -base64 32`) es obligatorio, no opcional.
+
+---
+
+## Módulo MVC con Thymeleaf (Laboratorio 6)
+
+Además de la API REST stateless (JWT), la aplicación expone un segundo
+módulo bajo `/mvc/**`: vistas renderizadas en el servidor con
+[Thymeleaf](https://www.thymeleaf.org/), pensado para un administrador o
+estudiante que navega desde el propio navegador en vez de consumir la API.
+Reutiliza las mismas clases de `business` que la API — ninguna regla de
+negocio se duplicó, los controladores MVC solo traducen entre formularios
+HTML y los DTOs existentes.
+
+### Por qué una segunda cadena de seguridad
+
+La API REST es **stateless** (cada petición lleva su propio JWT) y por eso
+tiene CSRF deshabilitado — no hay nada que un ataque CSRF pueda explotar
+cuando el navegador no adjunta credenciales automáticamente. El módulo MVC
+es justo lo contrario: usa **sesión** (login por formulario, cookie de
+sesión) donde CSRF sí es necesario. En vez de forzar un único modelo de
+seguridad para los dos casos, [`SecurityConfig`](src/main/java/cr/ac/una/lab1/config/SecurityConfig.java)
+define **dos `SecurityFilterChain` independientes** con `@Order` y
+`.securityMatcher(...)`: una para `/mvc/**` (sesión + CSRF + login por
+formulario) y otra para el resto (JWT + stateless, la que ya existía). Ver
+el Javadoc de la clase para la matriz de autorización completa de cada una.
+
+### Casos de uso
+
+| Caso de uso | Rutas | Quién |
+|---|---|---|
+| Publicar un curso | `GET/POST /mvc/cursos/{id}/publicar` | ADMINISTRADOR |
+| Matricularse en una lección | `GET/POST /mvc/matriculas/nueva` | ESTUDIANTE |
+| Catálogo de cursos (listado paginado) | `GET /mvc/cursos` | público |
+| Mis matrículas (listado paginado, filtro por estado) | `GET /mvc/matriculas` | autenticado |
+| Ingresar / salir | `GET /mvc/login`, `POST /mvc/logout` | público |
+
+Controladores: [`CursoMvcController`](src/main/java/cr/ac/una/lab1/presentation/CursoMvcController.java),
+[`MatriculaMvcController`](src/main/java/cr/ac/una/lab1/presentation/MatriculaMvcController.java),
+[`MvcLoginController`](src/main/java/cr/ac/una/lab1/presentation/MvcLoginController.java).
+Plantillas en [`src/main/resources/templates`](src/main/resources/templates).
+
+### Post/Redirect/Get y CSRF
+
+Los dos `POST` (publicar curso, crear matrícula) siguen el patrón **PRG**:
+si la operación tiene éxito, el controlador responde con un `redirect:` al
+listado correspondiente (nunca renderiza una vista directo sobre un `POST`)
+— así un refresh del navegador repite el `GET` de siempre y nunca reenvía
+el formulario. El mensaje de éxito se pasa con `RedirectAttributes` (flash
+attribute), visible una sola vez tras la redirección.
+
+El token **CSRF** no se maneja a mano: cualquier `<form th:action="@{...}">`
+en una plantilla de este módulo lo recibe automáticamente como campo oculto
+(`CsrfRequestDataValueProcessor`, autoconfigurado por Spring Boot al tener
+Thymeleaf + Spring Security en el classpath). Si se omite `th:action` por
+un `action="..."` plano, el campo no se inyecta y el `POST` responde 403 —
+por eso todos los formularios del módulo usan la sintaxis de Thymeleaf.
+
+Formulario validado: `POST /mvc/matriculas/nueva` usa Bean Validation sobre
+[`NuevaMatriculaFormDTO`](src/main/java/cr/ac/una/lab1/presentation/NuevaMatriculaFormDTO.java)
+(`@NotNull` en lección y método de pago); los errores de campo se muestran
+inline con `th:errors`, y las reglas de negocio que fallan en el servicio
+(p. ej. cupo lleno, matrícula duplicada) se muestran igual sin perder lo
+que el usuario ya llenó en el formulario.
+
+### Probarlo localmente
+
+Con la app corriendo (`./gradlew bootRun`, ver [«Cómo clonarlo y
+levantarlo»](#cómo-clonarlo-y-levantarlo)), abrir `http://localhost:8080/mvc/cursos`
+en el navegador. Ingresar con las mismas credenciales semilla de la API
+(ver [Seguridad JWT](#seguridad-jwt)) — un correo `ADMINISTRADOR` para
+publicar cursos, uno `ESTUDIANTE` para matricularse.
+
+## Configuración y perfiles (dev / prod)
+
+Dos perfiles de Spring, uno por entorno — nunca un solo archivo con `if` por entorno:
+
+- [`application.properties`](src/main/resources/application.properties) — perfil
+  **`dev`** (activo por defecto, `spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev}`).
+  Todo tiene un valor de respaldo que coincide con `docker-compose.yml`, así que
+  corre local sin crear ningún `.env` (excepto `JWT_SECRET`, ver arriba).
+- [`application-prod.properties`](src/main/resources/application-prod.properties) — perfil
+  **`prod`**. Ninguna variable tiene valor de respaldo: si falta una en el panel
+  del proveedor, la app no arranca (mismo criterio *fail-fast* que `JWT_SECRET`).
+  Se activa con `SPRING_PROFILES_ACTIVE=prod`.
+
+### Variables de entorno
+
+Solo los **nombres** — los valores reales se configuran únicamente en el panel
+del proveedor (Render/Railway/Neon/Atlas) o en un `.env` local que nunca se
+commitea (ver [`.env.example`](.env.example) y [`spa/.env.example`](spa/.env.example)
+para el formato esperado de cada una, sin valores reales).
+
+| Variable | Dónde | Para qué |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | API (dev y prod) | Selecciona el perfil (`dev` local, `prod` en el proveedor). |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | API (dev) + `docker-compose.yml` | Conexión a Postgres local. |
+| `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`, `MONGO_DB`, `MONGO_PORT` | API (dev) + `docker-compose.yml` | Conexión a Mongo local. |
+| `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | API (prod) | Conexión a Postgres gestionado (Neon/Render, con SSL). |
+| `SPRING_DATA_MONGODB_URI` | API (prod) | Conexión a MongoDB Atlas. |
+| `JWT_SECRET` | API (dev y prod) | Clave de firma HS256. **Obligatoria**, sin valor de respaldo (ver arriba). |
+| `JWT_EXPIRATION_MS` | API (dev y prod, opcional) | Vigencia del token en milisegundos (default 24h). |
+| `CORS_ALLOWED_ORIGINS` | API (dev y prod) | Orígenes permitidos; en prod debe ser el dominio real donde quede publicada la SPA. |
+| `PORT` | API (prod) | Puerto que inyecta el proveedor gestionado. |
+| `VITE_API_URL` | SPA (`spa/.env`, build-time) | URL pública de la API que consume la SPA. |
+
+Guía paso a paso de dónde configurar cada una en el proveedor, diagrama de
+despliegue y checklist de verificación: [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
 
 ---
 

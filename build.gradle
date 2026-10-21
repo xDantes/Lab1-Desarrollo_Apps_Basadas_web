@@ -26,6 +26,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 
+	// Módulo MVC con Thymeleaf (Laboratorio 6): vistas renderizadas en el servidor,
+	// con sesión + CSRF, aparte de la API REST stateless.
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
+
 	// JWT (JJWT 0.12.x — API moderna, sin deps deprecadas)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.12.6'

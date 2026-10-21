@@ -6,34 +6,36 @@ Esta guía detalla los pasos para publicar la solución completa (**API Spring B
 
 ## 1. Arquitectura de Despliegue en la Nube
 
+```mermaid
+flowchart TB
+    Browser["Cliente / Navegador"]
+
+    subgraph SPA["SPA React (Vite) — Render Static Site / Vercel"]
+        SpaApp["lescocr-spa<br/>https://lescocr-spa.onrender.com"]
+    end
+
+    subgraph API["API Spring Boot 3 — Render Web Service (Docker)"]
+        ApiApp["lescocr-api · perfil 'prod'<br/>https://lescocr-api.onrender.com"]
+        Swagger["/swagger-ui.html"]
+    end
+
+    subgraph DB["Bases de datos gestionadas"]
+        PG[("PostgreSQL<br/>Neon.tech / Render")]
+        Mongo[("MongoDB Atlas<br/>M0 Free")]
+    end
+
+    Browser -- HTTPS --> SpaApp
+    SpaApp -- "HTTPS · Bearer JWT · CORS" --> ApiApp
+    Browser -. "HTTPS (docs)" .-> Swagger
+    ApiApp -- "TLS/SSL · JDBC" --> PG
+    ApiApp -- "TLS · SRV" --> Mongo
 ```
-                           ┌──────────────────────────────┐
-                           │   Cliente / Navegador Web    │
-                           └──────────────┬───────────────┘
-                                          │ HTTPS
-                                          ▼
-                      ┌───────────────────────────────────────┐
-                      │    SPA en React (Vite)                │
-                      │    Host: Render Static Site / Vercel  │
-                      │    URL: https://lesco-spa.onrender.com│
-                      └───────────────────┬───────────────────┘
-                                          │ HTTPS (Bearer JWT / CORS)
-                                          ▼
-                      ┌───────────────────────────────────────┐
-                      │    API REST Spring Boot 3             │
-                      │    Host: Render Web Service (Docker)  │
-                      │    URL: https://lesco-api.onrender.com│
-                      │    Perfil activo: 'prod'              │
-                      └───────────┬───────────────┬───────────┘
-                                  │               │
-                 TLS / SSL        │               │ TLS / SRV
-                                  ▼               ▼
-        ┌───────────────────────────────┐   ┌───────────────────────────────┐
-        │  PostgreSQL Gestionado        │   │  MongoDB Atlas (M0 Free)      │
-        │  Host: Neon.tech o Render DB  │   │  Host: MongoDB Cloud          │
-        │  Tablas: usuario, curso, etc. │   │  Colección: recursos, etc.    │
-        └───────────────────────────────┘   └───────────────────────────────┘
-```
+
+Todo el tráfico va sobre HTTPS: el navegador solo habla con la SPA y,
+directamente para la documentación, con Swagger UI; la SPA es la única que
+llama a la API, con el JWT en `Authorization: Bearer <token>` y el origen
+autorizado por `CORS_ALLOWED_ORIGINS`. La API es la única pieza con acceso a
+las bases de datos — ni la SPA ni el navegador las tocan directamente.
 
 ---
 

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Ingresar — LescoCR</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background:#f6f3f0; display:flex;
+               align-items:center; justify-content:center; min-height:100vh; margin:0; }
+        .card { background:#fff; padding:2rem; border-radius:8px; box-shadow:0 1px 6px rgba(0,0,0,.15); width:320px; }
+        h1 { font-size:1.2rem; margin:0 0 .25rem; }
+        p.subtitle { color:#666; font-size:.85rem; margin:0 0 1.25rem; }
+        label { display:block; margin:.75rem 0 .25rem; font-size:.85rem; color:#444; }
+        input { width:100%; padding:.55rem; box-sizing:border-box; border:1px solid #ccc; border-radius:4px; font-size:.95rem; }
+        button { margin-top:1.25rem; width:100%; padding:.6rem; background:#7a1f2b; color:#fff;
+                 border:none; border-radius:4px; cursor:pointer; font-size:.95rem; }
+        button:hover { background:#611822; }
+        .msg { padding:.6rem .75rem; border-radius:4px; margin-bottom:1rem; font-size:.8rem; }
+        .error { background:#fde2e2; color:#8a1f1f; }
+        .ok { background:#e3f3e1; color:#1f6b2b; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>LescoCR</h1>
+    <p class="subtitle">Módulo administrativo (sesión + CSRF)</p>
+
+    <p class="msg error" th:if="${param.error}">Correo o contraseña incorrectos.</p>
+    <p class="msg ok" th:if="${param.logout}">Sesión cerrada.</p>
+
+    <!-- Spring Security intercepta este POST automáticamente (ver SecurityConfig.mvcFilterChain).
+         th:action ya inyecta el campo oculto CSRF por su cuenta (CsrfRequestDataValueProcessor). -->
+    <form th:action="@{/mvc/login}" method="post">
+        <label for="username">Correo</label>
+        <input id="username" name="username" type="email" required autofocus>
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" required>
+        <button type="submit">Ingresar</button>
+    </form>
+</div>
+</body>
+</html>

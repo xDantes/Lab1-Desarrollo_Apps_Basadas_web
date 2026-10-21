@@ -5,6 +5,7 @@ import java.net.URI;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -20,26 +21,48 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Configura la seguridad HTTP de la API:
- * <ul>
- *   <li>Stateless (sin sesión ni cookie): cada petición debe llevar el JWT.
- *   <li>CSRF desactivado (API sin formularios HTML).
- *   <li>Autorización por endpoint según rol ({@link cr.ac.una.lab1.data.RolUsuario}).
- *   <li>Filtro JWT antes del filtro de usuario/contraseña estándar.
- *   <li>Respuestas 401/403 en formato Problem Detail (RFC 9457), sin traza de Java.
- * </ul>
+ * Configura la seguridad HTTP de la aplicación con <strong>dos cadenas de
+ * filtros independientes</strong>, cada una con el modelo que le corresponde:
  *
- * <h3>Matriz de autorización</h3>
+ * <ol>
+ *   <li>{@link #mvcFilterChain} — rutas {@code /mvc/**} (Laboratorio 6: módulo
+ *       MVC con Thymeleaf). Con <strong>sesión</strong> (login por formulario)
+ *       y <strong>CSRF habilitado</strong>: CSRF protege formularios donde el
+ *       navegador manda cookies automáticamente, que es exactamente el caso
+ *       aquí — no tendría sentido en la API stateless de abajo.
+ *   <li>{@link #apiFilterChain} — todo lo demás (API REST, Swagger, login JWT).
+ *       <strong>Sin sesión</strong> (cada petición lleva su propio Bearer
+ *       token) y <strong>CSRF deshabilitado</strong>: un atacante no puede
+ *       forzar a un navegador a adjuntar un header {@code Authorization} que
+ *       no tiene, así que no hay nada que un ataque CSRF pueda explotar aquí.
+ * </ol>
+ *
+ * <p>Spring prueba las cadenas en el orden de {@code @Order}; la primera cuyo
+ * {@code securityMatcher} calce con la petición es la que se usa. Las dos
+ * comparten el mismo {@link UsuarioDetailsServiceImpl} y {@link PasswordEncoder}
+ * — un usuario autentica con las mismas credenciales en ambas, solo cambia el
+ * mecanismo (JWT vs. sesión) según por dónde entre.
+ *
+ * <h3>Matriz de autorización — API (JWT)</h3>
  * <pre>
  * POST /auth/login                       → público
- * GET  /api/cursos                       → público
+ * GET  /api/v1/cursos                    → público
  * GET  /v3/api-docs/**, /swagger-ui/**   → público
- * POST /api/cursos/{id}/publicar         → ADMINISTRADOR
+ * POST /api/v1/cursos/{id}/publicar      → ADMINISTRADOR
  * POST /api/v1/matriculas                → ESTUDIANTE
  * POST /api/v1/matriculas/{id}/aprobar   → ADMINISTRADOR
  * POST /api/v1/matriculas/{id}/cancelar  → ESTUDIANTE, ADMINISTRADOR
  * GET  /api/v1/matriculas/**             → autenticado
  * cualquier otro                         → autenticado
+ * </pre>
+ *
+ * <h3>Matriz de autorización — MVC (sesión)</h3>
+ * <pre>
+ * GET  /mvc/login, /mvc/logout           → público
+ * GET  /mvc/cursos                       → público
+ * GET/POST /mvc/cursos/{id}/publicar     → ADMINISTRADOR
+ * GET/POST /mvc/matriculas/nueva         → ESTUDIANTE
+ * cualquier otro bajo /mvc/**            → autenticado
  * </pre>
  */
 @Configuration
@@ -61,8 +84,47 @@ public class SecurityConfig {
         this.objectMapper = objectMapper;
     }
 
+    // -------------------------------------------------------------------
+    // Cadena 1: módulo MVC con Thymeleaf (sesión, formulario, CSRF)
+    // -------------------------------------------------------------------
+
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain mvcFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher("/mvc/**")
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/mvc/login", "/mvc/logout").permitAll()
+                .requestMatchers(HttpMethod.GET, "/mvc/cursos").permitAll()
+                .requestMatchers("/mvc/cursos/*/publicar").hasRole("ADMINISTRADOR")
+                .requestMatchers("/mvc/matriculas/nueva").hasRole("ESTUDIANTE")
+                .anyRequest().authenticated()
+            )
+            .formLogin(form -> form
+                .loginPage("/mvc/login")
+                .defaultSuccessUrl("/mvc/cursos", true)
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutUrl("/mvc/logout")
+                .logoutSuccessUrl("/mvc/login?logout")
+                .permitAll()
+            );
+            // Nada de .csrf(disable) ni .sessionManagement(STATELESS) aquí:
+            // esta cadena se queda con los valores por defecto de Spring
+            // Security (sesión IF_REQUIRED + CSRF con HttpSessionCsrfTokenRepository),
+            // que es justo lo que un módulo con formularios necesita.
+
+        return http.build();
+    }
+
+    // -------------------------------------------------------------------
+    // Cadena 2: API REST (stateless, JWT, sin CSRF)
+    // -------------------------------------------------------------------
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())

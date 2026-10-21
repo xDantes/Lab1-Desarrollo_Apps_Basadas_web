@@ -17,6 +17,7 @@ public record CursoCatalogoDTO(
         int cupoTotal,
         int cuposDisponibles,
         LocalDate fechaInicio,
-        LocalDate fechaFin
+        LocalDate fechaFin,
+        boolean publicado
 ) {
 }

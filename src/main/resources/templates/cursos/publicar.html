@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Publicar curso — LescoCR</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin:0; background:#f6f3f0; color:#222; }
+        nav { background:#7a1f2b; color:#fff; padding:.75rem 1.5rem; display:flex; align-items:center; gap:1.25rem; }
+        nav .brand { font-weight:bold; margin-right:auto; }
+        nav a { color:#fff; text-decoration:none; font-size:.9rem; }
+        nav button { background:none; border:1px solid #fff; color:#fff; padding:.3rem .7rem; border-radius:4px; cursor:pointer; }
+        main { max-width:480px; margin:2rem auto; padding:1.5rem; background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+        h1 { font-size:1.2rem; margin-top:0; }
+        dl { font-size:.9rem; }
+        dt { color:#666; }
+        dd { margin:0 0 .75rem; }
+        button.confirm { padding:.6rem 1.2rem; background:#7a1f2b; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+        a.cancel { margin-left:.75rem; font-size:.9rem; color:#555; }
+        .msg { padding:.6rem .75rem; border-radius:4px; margin-bottom:1rem; font-size:.85rem; }
+        .error { background:#fde2e2; color:#8a1f1f; }
+    </style>
+</head>
+<body>
+<nav>
+    <span class="brand">LescoCR</span>
+    <a th:href="@{/mvc/cursos}">Cursos</a>
+    <a th:href="@{/mvc/matriculas}">Matrículas</a>
+    <span sec:authentication="name" style="font-size:.85rem;"></span>
+    <form th:action="@{/mvc/logout}" method="post" style="display:inline;margin:0;">
+        <button type="submit">Salir</button>
+    </form>
+</nav>
+
+<main>
+    <h1>Publicar curso</h1>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
+    <dl>
+        <dt>Código</dt><dd th:text="${curso.codigo}"></dd>
+        <dt>Nombre</dt><dd th:text="${curso.nombre}"></dd>
+        <dt>Nivel</dt><dd th:text="${curso.nivel}"></dd>
+        <dt>Fechas</dt><dd th:text="${curso.fechaInicio} + ' — ' + ${curso.fechaFin}"></dd>
+    </dl>
+
+    <p>Se van a verificar las reglas de publicación (lecciones, instructor
+        asignado y recurso multimedia) antes de activarlo en el catálogo.</p>
+
+    <!-- th:action ya inyecta el token CSRF; el administrador que autoriza se
+         resuelve en el controlador a partir de la sesión, no de este formulario. -->
+    <form th:action="@{/mvc/cursos/{id}/publicar(id=${curso.id})}" method="post">
+        <button type="submit" class="confirm">Confirmar publicación</button>
+        <a class="cancel" th:href="@{/mvc/cursos}">Cancelar</a>
+    </form>
+</main>
+</body>
+</html>

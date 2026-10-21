@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Nueva matrícula — LescoCR</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin:0; background:#f6f3f0; color:#222; }
+        nav { background:#7a1f2b; color:#fff; padding:.75rem 1.5rem; display:flex; align-items:center; gap:1.25rem; }
+        nav .brand { font-weight:bold; margin-right:auto; }
+        nav a { color:#fff; text-decoration:none; font-size:.9rem; }
+        nav button { background:none; border:1px solid #fff; color:#fff; padding:.3rem .7rem; border-radius:4px; cursor:pointer; }
+        main { max-width:480px; margin:2rem auto; padding:1.5rem; background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+        h1 { font-size:1.2rem; margin-top:0; }
+        label { display:block; margin:.9rem 0 .3rem; font-size:.85rem; color:#444; }
+        select, input { width:100%; padding:.55rem; box-sizing:border-box; border:1px solid #ccc; border-radius:4px; font-size:.95rem; }
+        .field-error { color:#8a1f1f; font-size:.8rem; margin-top:.25rem; }
+        button.confirm { margin-top:1.5rem; padding:.6rem 1.2rem; background:#7a1f2b; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+        a.cancel { margin-left:.75rem; font-size:.9rem; color:#555; }
+        .msg { padding:.6rem .75rem; border-radius:4px; margin-bottom:1rem; font-size:.85rem; }
+        .error { background:#fde2e2; color:#8a1f1f; }
+    </style>
+</head>
+<body>
+<nav>
+    <span class="brand">LescoCR</span>
+    <a th:href="@{/mvc/cursos}">Cursos</a>
+    <a th:href="@{/mvc/matriculas}">Matrículas</a>
+    <span sec:authentication="name" style="font-size:.85rem;"></span>
+    <form th:action="@{/mvc/logout}" method="post" style="display:inline;margin:0;">
+        <button type="submit">Salir</button>
+    </form>
+</nav>
+
+<main>
+    <h1>Nueva matrícula</h1>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
+    <!-- th:object + th:field enlazan directamente contra NuevaMatriculaFormDTO;
+         th:action ya inyecta el token CSRF. estudianteId y cursoId no están en
+         este formulario: el controlador los resuelve del usuario en sesión y
+         de la lección elegida (ver MatriculaMvcController#crear). -->
+    <form th:action="@{/mvc/matriculas/nueva}" th:object="${form}" method="post">
+        <label for="leccionId">Lección</label>
+        <select id="leccionId" th:field="*{leccionId}">
+            <option value="">— Seleccione —</option>
+            <option th:each="l : ${lecciones}" th:value="${l.id}"
+                    th:text="${l.codigoCurso} + ' — ' + ${l.titulo} + ' (' + ${l.nombreInstructor ?: 'sin instructor'} + ')'"></option>
+        </select>
+        <p class="field-error" th:if="${#fields.hasErrors('leccionId')}" th:errors="*{leccionId}"></p>
+
+        <label for="metodoPago">Método de pago</label>
+        <select id="metodoPago" th:field="*{metodoPago}">
+            <option value="">— Seleccione —</option>
+            <option th:each="m : ${metodos}" th:value="${m}" th:text="${m}"></option>
+        </select>
+        <p class="field-error" th:if="${#fields.hasErrors('metodoPago')}" th:errors="*{metodoPago}"></p>
+
+        <label for="referencia">Referencia de pago (opcional)</label>
+        <input id="referencia" th:field="*{referencia}" type="text" maxlength="50">
+        <p class="field-error" th:if="${#fields.hasErrors('referencia')}" th:errors="*{referencia}"></p>
+
+        <button type="submit" class="confirm">Matricularme</button>
+        <a class="cancel" th:href="@{/mvc/matriculas}">Cancelar</a>
+    </form>
+</main>
+</body>
+</html>

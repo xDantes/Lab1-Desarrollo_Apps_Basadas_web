@@ -81,4 +81,23 @@ class UsuarioServiceTest {
         assertThatThrownBy(() -> service.obtenerPorId(99L))
                 .isInstanceOf(EntidadNoEncontradaException.class);
     }
+
+    @Test
+    void obtenerPorCorreo_existente_retornaDTO() {
+        when(usuarioRepository.findByCorreo("luis@lescocr.cr"))
+                .thenReturn(Optional.of(usuario("Luis", RolUsuario.ESTUDIANTE, 4L)));
+
+        UsuarioResponseDTO dto = service.obtenerPorCorreo("luis@lescocr.cr");
+
+        assertThat(dto.id()).isEqualTo(4L);
+        assertThat(dto.correo()).isEqualTo("luis@lescocr.cr");
+    }
+
+    @Test
+    void obtenerPorCorreo_noExiste_lanzaEntidadNoEncontrada() {
+        when(usuarioRepository.findByCorreo("ausente@lescocr.cr")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.obtenerPorCorreo("ausente@lescocr.cr"))
+                .isInstanceOf(EntidadNoEncontradaException.class);
+    }
 }

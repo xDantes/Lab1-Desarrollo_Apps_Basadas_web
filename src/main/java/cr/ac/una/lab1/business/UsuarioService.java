@@ -34,6 +34,20 @@ public class UsuarioService {
         return toDTO(u);
     }
 
+    /**
+     * Un usuario por correo — el nombre de usuario en Spring Security es el
+     * correo (ver {@link cr.ac.una.lab1.config.UsuarioDetailsServiceImpl}), así
+     * que esto es lo que usan los controladores (API y MVC) para resolver
+     * "quién soy" a partir de {@code Authentication#getName()} sin tocar
+     * {@code UsuarioRepository} directamente desde la capa de presentación.
+     */
+    @Transactional(readOnly = true)
+    public UsuarioResponseDTO obtenerPorCorreo(String correo) {
+        Usuario u = usuarioRepository.findByCorreo(correo)
+                .orElseThrow(() -> new EntidadNoEncontradaException("Usuario", correo));
+        return toDTO(u);
+    }
+
     private UsuarioResponseDTO toDTO(Usuario u) {
         return new UsuarioResponseDTO(
                 u.getId(),

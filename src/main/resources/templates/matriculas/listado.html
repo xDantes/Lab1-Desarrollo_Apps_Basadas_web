@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Matrículas — LescoCR</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin:0; background:#f6f3f0; color:#222; }
+        nav { background:#7a1f2b; color:#fff; padding:.75rem 1.5rem; display:flex; align-items:center; gap:1.25rem; }
+        nav .brand { font-weight:bold; margin-right:auto; }
+        nav a { color:#fff; text-decoration:none; font-size:.9rem; }
+        nav a:hover { text-decoration:underline; }
+        nav button { background:none; border:1px solid #fff; color:#fff; padding:.3rem .7rem; border-radius:4px; cursor:pointer; }
+        main { max-width:1000px; margin:2rem auto; padding:0 1rem; }
+        h1 { font-size:1.3rem; display:flex; align-items:center; justify-content:space-between; }
+        table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+        th, td { text-align:left; padding:.6rem .75rem; border-bottom:1px solid #eee; font-size:.88rem; }
+        th { background:#f0ebe6; }
+        .badge { padding:.15rem .5rem; border-radius:10px; font-size:.75rem; }
+        .ACTIVA { background:#e3f3e1; color:#1f6b2b; }
+        .CANCELADA { background:#fde2e2; color:#8a1f1f; }
+        .FINALIZADA, .COMPLETADA { background:#e0e7f3; color:#273d7a; }
+        .filtros { margin:.75rem 0; display:flex; gap:.5rem; align-items:center; font-size:.85rem; }
+        .filtros select { padding:.3rem; }
+        .pager { margin-top:1rem; display:flex; gap:.5rem; align-items:center; font-size:.85rem; }
+        .pager a, .pager span { padding:.3rem .6rem; border:1px solid #ccc; border-radius:4px; text-decoration:none; color:#333; }
+        .msg { padding:.6rem .75rem; border-radius:4px; margin-bottom:1rem; font-size:.85rem; }
+        .ok { background:#e3f3e1; color:#1f6b2b; }
+        .btn { display:inline-block; padding:.4rem .8rem; background:#7a1f2b; color:#fff;
+               border-radius:4px; text-decoration:none; font-size:.85rem; }
+    </style>
+</head>
+<body>
+<nav>
+    <span class="brand">LescoCR</span>
+    <a th:href="@{/mvc/cursos}">Cursos</a>
+    <a th:href="@{/mvc/matriculas}">Matrículas</a>
+    <span sec:authentication="name" style="font-size:.85rem;"></span>
+    <form th:action="@{/mvc/logout}" method="post" style="display:inline;margin:0;">
+        <button type="submit">Salir</button>
+    </form>
+</nav>
+
+<main>
+    <h1>
+        Matrículas
+        <a sec:authorize="hasRole('ESTUDIANTE')" class="btn" th:href="@{/mvc/matriculas/nueva}">Nueva matrícula</a>
+    </h1>
+    <p class="msg ok" th:if="${mensaje}" th:text="${mensaje}"></p>
+
+    <form class="filtros" method="get" th:action="@{/mvc/matriculas}">
+        <label for="estado">Estado</label>
+        <select id="estado" name="estado" onchange="this.form.submit()">
+            <option value="">Todos</option>
+            <option th:each="e : ${estados}" th:value="${e}" th:text="${e}"
+                    th:selected="${e == estadoFiltro}"></option>
+        </select>
+    </form>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Consecutivo</th><th>Curso</th><th>Lección</th>
+            <th sec:authorize="hasRole('ADMINISTRADOR')">Estudiante</th>
+            <th>Estado</th><th>Precio</th><th>Fecha</th><th>Pago</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="m : ${pagina.content}">
+            <td th:text="${m.consecutivo}"></td>
+            <td th:text="${m.codigoCurso} + ' — ' + ${m.nombreCurso}"></td>
+            <td th:text="${m.tituloLeccion}"></td>
+            <td sec:authorize="hasRole('ADMINISTRADOR')" th:text="${m.nombreEstudiante}"></td>
+            <td><span class="badge" th:classappend="${m.estadoMatricula}" th:text="${m.estadoMatricula}"></span></td>
+            <td th:text="'₡' + ${m.precioFinal}"></td>
+            <td th:text="${m.fechaMatricula}"></td>
+            <td th:text="${m.estadoPago} ?: '—'"></td>
+        </tr>
+        <tr th:if="${pagina.empty}">
+            <td colspan="8">No hay matrículas que mostrar.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="pager">
+        <a th:if="${pagina.hasPrevious()}"
+           th:href="@{/mvc/matriculas(page=${pagina.number - 1}, estado=${estadoFiltro})}">&laquo; Anterior</a>
+        <span th:text="'Página ' + (${pagina.number} + 1) + ' de ' + ${pagina.totalPages}"></span>
+        <a th:if="${pagina.hasNext()}"
+           th:href="@{/mvc/matriculas(page=${pagina.number + 1}, estado=${estadoFiltro})}">Siguiente &raquo;</a>
+    </div>
+</main>
+</body>
+</html>

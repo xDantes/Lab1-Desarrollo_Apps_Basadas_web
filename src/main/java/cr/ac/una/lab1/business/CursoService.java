@@ -199,7 +199,8 @@ public class CursoService {
                 curso.getCupoTotal(),
                 cuposDisponibles,
                 curso.getFechaInicio(),
-                curso.getFechaFin()
+                curso.getFechaFin(),
+                curso.isPublicado()
         );
     }
 

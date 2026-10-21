@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Cursos — LescoCR</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin:0; background:#f6f3f0; color:#222; }
+        nav { background:#7a1f2b; color:#fff; padding:.75rem 1.5rem; display:flex; align-items:center; gap:1.25rem; }
+        nav .brand { font-weight:bold; margin-right:auto; }
+        nav a { color:#fff; text-decoration:none; font-size:.9rem; }
+        nav a:hover { text-decoration:underline; }
+        nav button { background:none; border:1px solid #fff; color:#fff; padding:.3rem .7rem; border-radius:4px; cursor:pointer; }
+        main { max-width:900px; margin:2rem auto; padding:0 1rem; }
+        h1 { font-size:1.3rem; }
+        table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+        th, td { text-align:left; padding:.6rem .75rem; border-bottom:1px solid #eee; font-size:.9rem; }
+        th { background:#f0ebe6; }
+        .badge { padding:.15rem .5rem; border-radius:10px; font-size:.75rem; }
+        .pub { background:#e3f3e1; color:#1f6b2b; }
+        .nopub { background:#f0e4c0; color:#8a6d1f; }
+        .pager { margin-top:1rem; display:flex; gap:.5rem; align-items:center; font-size:.85rem; }
+        .pager a, .pager span { padding:.3rem .6rem; border:1px solid #ccc; border-radius:4px; text-decoration:none; color:#333; }
+        .msg { padding:.6rem .75rem; border-radius:4px; margin-bottom:1rem; font-size:.85rem; }
+        .ok { background:#e3f3e1; color:#1f6b2b; }
+        .btn { display:inline-block; padding:.25rem .6rem; background:#7a1f2b; color:#fff;
+               border-radius:4px; text-decoration:none; font-size:.8rem; }
+    </style>
+</head>
+<body>
+<nav>
+    <span class="brand">LescoCR</span>
+    <a th:href="@{/mvc/cursos}">Cursos</a>
+    <a sec:authorize="isAuthenticated()" th:href="@{/mvc/matriculas}">Matrículas</a>
+    <span sec:authorize="isAuthenticated()" sec:authentication="name" style="font-size:.85rem;"></span>
+    <form sec:authorize="isAuthenticated()" th:action="@{/mvc/logout}" method="post" style="display:inline;margin:0;">
+        <button type="submit">Salir</button>
+    </form>
+    <a sec:authorize="!isAuthenticated()" th:href="@{/mvc/login}">Ingresar</a>
+</nav>
+
+<main>
+    <h1>Catálogo de cursos</h1>
+    <p class="msg ok" th:if="${mensaje}" th:text="${mensaje}"></p>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Código</th><th>Nombre</th><th>Nivel</th><th>Precio</th>
+            <th>Cupos</th><th>Estado</th><th sec:authorize="hasRole('ADMINISTRADOR')"></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="c : ${pagina.content}">
+            <td th:text="${c.codigo}"></td>
+            <td th:text="${c.nombre}"></td>
+            <td th:text="${c.nivel}"></td>
+            <td th:text="'₡' + ${c.precioFinal}"></td>
+            <td th:text="${c.cuposDisponibles} + ' / ' + ${c.cupoTotal}"></td>
+            <td>
+                <span th:if="${c.publicado}" class="badge pub">Publicado</span>
+                <span th:unless="${c.publicado}" class="badge nopub">Sin publicar</span>
+            </td>
+            <td sec:authorize="hasRole('ADMINISTRADOR')">
+                <a th:if="${!c.publicado}" class="btn" th:href="@{/mvc/cursos/{id}/publicar(id=${c.id})}">Publicar</a>
+            </td>
+        </tr>
+        <tr th:if="${pagina.empty}">
+            <td colspan="7">No hay cursos que mostrar.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="pager">
+        <a th:if="${pagina.hasPrevious()}" th:href="@{/mvc/cursos(page=${pagina.number - 1})}">&laquo; Anterior</a>
+        <span th:text="'Página ' + (${pagina.number} + 1) + ' de ' + ${pagina.totalPages}"></span>
+        <a th:if="${pagina.hasNext()}" th:href="@{/mvc/cursos(page=${pagina.number + 1})}">Siguiente &raquo;</a>
+    </div>
+</main>
+</body>
+</html>
