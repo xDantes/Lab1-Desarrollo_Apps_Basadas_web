@@ -127,9 +127,9 @@ la prueba **falla** con el error real de Testcontainers, no se salta.
 
 Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositorio):
 1. Testcontainers descarga e inicia los contenedores `postgres:16-alpine` y `mongo:7.0`.
-2. Flyway ejecuta exitosamente las migraciones `V1__crear_usuario.sql` hasta `V8__datos_semilla_matricula_pago.sql`.
+2. Flyway ejecuta exitosamente las migraciones `V1__crear_usuario.sql` hasta `V10__actualizar_contrasenas_semilla.sql`.
 3. Hibernate valida la coherencia entre las entidades JPA y la BD (`Schema-validation: [SUCCESS]`).
-4. Se ejecutan en verde (PASSED) **11 pruebas de integración**, en 3 clases:
+4. Se ejecutan en verde (PASSED) **19 pruebas de integración**, en 4 clases:
 
    [`Lab1ApplicationTests`](src/test/java/cr/ac/una/lab1/Lab1ApplicationTests.java):
    - `contextLoads`: el contexto de Spring arranca contra Postgres/Mongo reales.
@@ -148,6 +148,16 @@ Al ejecutar las pruebas con Docker iniciado (localmente o en el CI del repositor
    - `test9_RollbackVerificado_FalloEnPagoRevierteMatricula`: un `@SpyBean` hace fallar `PagoRepository.save()` a mitad del proceso de matriculación y comprueba que la `Matricula` ya persistida también se revierte (transacción verificada).
    - `test10_ReglasNegocioYPatronState`: reglas de `MatriculaService` y las transiciones del patrón State, contra datos reales.
 
+   [`ApiSecurityIntegrationTest`](src/test/java/cr/ac/una/lab1/ApiSecurityIntegrationTest.java) (Laboratorio 5) — la API completa, de punta a punta, vía JWT real emitido por `POST /auth/login`:
+   - `test_201_matricularEstudiante`: `POST /api/v1/matriculas` — un ESTUDIANTE crea su propia matrícula.
+   - `test_400_loginSinCorreo`: `POST /auth/login` sin correo — rechazado por Bean Validation.
+   - `test_401_sinToken`: `GET /api/v1/matriculas` sin header `Authorization`.
+   - `test_403_estudianteIntentaPublicar`: un ESTUDIANTE intenta `POST /api/v1/cursos/{id}/publicar` (requiere ADMINISTRADOR).
+   - `test_403_owaspApi1_cancelarMatriculaAjena`: un ESTUDIANTE intenta cancelar la matrícula de otro (OWASP API1).
+   - `test_404_matriculaNoExiste`: `GET /api/v1/matriculas/99999`.
+   - `test_422_reglaNegocioSinpeInvalido`: referencia SINPE con formato inválido.
+   - `test_401_tokenInvalido`: un JWT malformado es rechazado.
+
 El reporte HTML completo se genera en: `build/reports/tests/test/index.html`.
 
 ---
@@ -156,10 +166,55 @@ El reporte HTML completo se genera en: `build/reports/tests/test/index.html`.
 
 El proyecto sigue una separación por capas bajo `cr.ac.una.lab1`:
 
-- `presentation` — controladores REST (ej. `CursoController`).
-- `business` — reglas de negocio y DTOs de salida (ej. `CursoService`, `CursoCatalogoDTO`).
-- `data` — entidades JPA y repositorios de PostgreSQL (`Usuario`, `Curso`, `Leccion`, `Matricula`, `Pago`), y en    `data.mongo` los documentos/repositorios de MongoDB (`SenaLesco`, `RecursoMultimedia`, `Comentario`).
-- `config` — configuración transversal de la aplicación.
+- `presentation` — controladores REST (`AuthController`, `CursoController`,
+  `MatriculaController`, `PagoController`, `InstructorController`,
+  `LeccionController`, `UsuarioController`) y `GlobalExceptionHandler`.
+- `business` — reglas de negocio, DTOs de entrada/salida y las excepciones propias del
+  dominio (`business.exception`), más los patrones State (`business.state`) y
+  Strategy (`business.strategy`).
+- `data` — entidades JPA y repositorios de PostgreSQL (`Usuario`, `Instructor`, `Curso`,
+  `Leccion`, `Matricula`, `Pago`), con filtrado dinámico en `data.specification`
+  (`CursoSpecification`, `MatriculaSpecification`); y en `data.mongo` los
+  documentos/repositorios de MongoDB (`SenaLesco`, `RecursoMultimedia`, `Comentario`).
+- `config` — seguridad stateless con JWT (`SecurityConfig`, `JwtTokenProvider`,
+  `JwtAuthenticationFilter`, `UsuarioDetailsServiceImpl`) y documentación OpenAPI
+  (`OpenApiConfig`).
+
+## Endpoints de la API
+
+Contrato versionado bajo `/api/v1` (Laboratorio 5). Todas las respuestas de
+error usan Problem Details — ver la tabla completa en
+[Frontera DTO](#frontera-dto--capa-de-negocio-laboratorio-4-y-5).
+
+| Recurso | Método | Ruta | Quién puede | Códigos típicos |
+|---|---|---|---|---|
+| Autenticación | `POST` | `/auth/login` | público | 200, 400, 401 |
+| Cursos | `GET` | `/api/v1/cursos` | público | 200 |
+| Cursos | `GET` | `/api/v1/cursos/{id}` | público | 200, 404 |
+| Cursos | `GET` | `/api/v1/cursos/{id}/lecciones` | público | 200, 404 |
+| Cursos | `POST` | `/api/v1/cursos/{id}/publicar` | ADMINISTRADOR | 200, 400, 404, 409, 422 |
+| Instructores | `GET` | `/api/v1/instructores`, `/{id}` | público | 200, 404 |
+| Lecciones | `GET` | `/api/v1/lecciones`, `/{id}` | público | 200, 404 |
+| Matrículas | `POST` | `/api/v1/matriculas` | ESTUDIANTE | 201, 400, 401, 409, 422 |
+| Matrículas | `GET` | `/api/v1/matriculas` | autenticado (ve lo suyo, salvo ADMINISTRADOR) | 200 |
+| Matrículas | `GET` | `/api/v1/matriculas/{id}` | propietario o ADMINISTRADOR | 200, 403, 404 |
+| Matrículas | `POST` | `/api/v1/matriculas/{id}/aprobar` | ADMINISTRADOR | 204, 404, 409 |
+| Matrículas | `POST` | `/api/v1/matriculas/{id}/cancelar` | propietario (ESTUDIANTE) o ADMINISTRADOR | 204, 403, 404, 409 |
+| Pagos | `GET` | `/api/v1/pagos` | autenticado (ve lo suyo, salvo ADMINISTRADOR) | 200 |
+| Pagos | `GET` | `/api/v1/pagos/{id}` | propietario o ADMINISTRADOR | 200, 403, 404 |
+| Usuarios | `GET` | `/api/v1/usuarios`, `/{id}` | ADMINISTRADOR | 200, 404 |
+| Documentación | `GET` | `/v3/api-docs`, `/swagger-ui.html` | público | 200 |
+
+Dos formas de ejercitar esto sin escribir código:
+
+- **Swagger UI**: con la app corriendo, abrir `http://localhost:8080/swagger-ui.html`
+  — documentación interactiva generada por [`OpenApiConfig`](src/main/java/cr/ac/una/lab1/config/OpenApiConfig.java)
+  (springdoc), con botón **Authorize** para pegar el JWT y probar los endpoints protegidos
+  directamente desde el navegador.
+- **Colección de peticiones**: [`requests/lesco-api.http`](requests/lesco-api.http)
+  — cubre los endpoints de la tabla de arriba (login de los 2 roles, cada recurso, y los
+  caminos de error 400/401/403/404/409/422), compatible con el HTTP Client de
+  IntelliJ/VS Code (extensión REST Client) sin instalar Postman.
 
 ## Persistencia
 
@@ -532,14 +587,17 @@ expuesta" incluso para errores que ningún handler específico contempló.
 
 ### Verificación de que ninguna entidad cruza la frontera
 
-`presentation/CursoController.java` y `presentation/MatriculaController.java`
-solo importan tipos de `cr.ac.una.lab1.business` (los DTOs) y de Spring; ningún
-método público de ningún controlador recibe ni devuelve `Curso`, `Matricula`,
-`Usuario`, `Leccion` ni `Pago`. Comando usado para confirmarlo (sin resultados
-= sin fugas):
+Los 7 controladores (`AuthController`, `CursoController`, `MatriculaController`,
+`PagoController`, `InstructorController`, `LeccionController`, `UsuarioController`)
+solo reciben y devuelven tipos de `cr.ac.una.lab1.business` (los DTOs) y de
+Spring; ningún método público recibe ni devuelve `Curso`, `Matricula`,
+`Usuario`, `Leccion`, `Pago` ni `Instructor`. Comando usado para confirmarlo
+(sin resultados = sin fugas; el patrón exige que la palabra no venga pegada a
+otra, para no contar falsos positivos como `EstadoMatricula`/`RolUsuario`,
+que son enums, no entidades):
 
 ```bash
-grep -rn "Curso \|Matricula \|Usuario \|Leccion \|Pago " src/main/java/cr/ac/una/lab1/presentation/
+grep -rnE "(^|[^A-Za-z])(Curso|Matricula|Usuario|Leccion|Pago|Instructor) " src/main/java/cr/ac/una/lab1/presentation/
 ```
 
 ---

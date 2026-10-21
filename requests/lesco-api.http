@@ -28,7 +28,7 @@ Content-Type: application/json
   "contrasena": "Student1234!"
 }
 
-### 1.3 Login con credenciales incorrectas → 422
+### 1.3 Login con credenciales incorrectas → 401
 POST {{host}}/auth/login
 Content-Type: application/json
 
