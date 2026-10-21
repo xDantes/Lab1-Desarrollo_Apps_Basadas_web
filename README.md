@@ -44,7 +44,21 @@ porque las pruebas levantan el contexto de Spring con JPA + Flyway ya conectados
 ./gradlew build
 ```
 
-3. Levantarla:
+3. Definir `JWT_SECRET` — **obligatoria**, la app no arranca sin ella (a propósito:
+   antes tenía un valor por defecto committeado al repo; ver más abajo
+   [«Por qué no hay un `JWT_SECRET` por defecto»](#por-qué-no-hay-un-jwt_secret-por-defecto)).
+   No hace falta para `./gradlew build`/`test` (las pruebas usan su propio secreto
+   de prueba), solo para correr la app de verdad:
+
+```bash
+# PowerShell
+$env:JWT_SECRET = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+
+# Bash / macOS / Linux
+export JWT_SECRET=$(openssl rand -base64 32)
+```
+
+4. Levantarla:
 
 ```bash
 ./gradlew bootRun
@@ -493,14 +507,24 @@ de validación). Mapeo completo en
 
 | Excepción / causa | Status | `type` |
 |---|---|---|
+| `CredencialesInvalidasException` (`POST /auth/login` falla) | 401 | `.../problems/credenciales-invalidas` |
 | `EntidadNoEncontradaException` | 404 | `.../problems/entidad-no-encontrada` |
+| `AccesoNoAutorizadoException` (OWASP API1 — recurso ajeno) | 403 | `.../problems/acceso-no-autorizado` |
 | `CambioEstadoInvalidoException` | 409 | `.../problems/cambio-estado-invalido` |
 | `MatriculaDuplicadaException` | 409 | `.../problems/matricula-duplicada` |
 | `SinCupoDisponibleException` | 409 | `.../problems/sin-cupo-disponible` |
 | `ReglaNegocioException` (resto de reglas) | 422 | `.../problems/regla-negocio` |
 | `@Valid` rechaza el DTO (`MethodArgumentNotValidException`) | 400 | `.../problems/validacion` |
 | Parámetro con tipo inválido, p. ej. `GET /api/v1/cursos/abc` | 400 | `.../problems/parametro-invalido` |
+| Cuerpo no es JSON válido (`HttpMessageNotReadableException`) | 400 | `.../problems/cuerpo-invalido` |
+| Ruta inexistente (`NoResourceFoundException`/`NoHandlerFoundException`) | 404 | `.../problems/ruta-no-encontrada` |
 | Cualquier otra excepción no prevista | 500 | `.../problems/error-interno` |
+
+Las últimas dos filas existen porque el `@ExceptionHandler(Exception.class)`
+genérico, al capturar *todo*, también interceptaba excepciones que Spring ya
+sabía traducir correctamente por su cuenta — un JSON malformado y una ruta
+inexistente respondían 500 en vez de 400/404. Como Spring resuelve siempre por
+el handler más específico, bastó con declarar uno para cada una.
 
 El último caso es la red de seguridad: nunca devuelve `ex.getMessage()` ni la
 traza real, solo confirma que algo falló — así se cumple "ninguna traza
@@ -565,6 +589,47 @@ ejemplo `?cursoId=1&estado=ACTIVA&precioFinalMin=40000`.
 
 ---
 
+## Seguridad JWT
+
+```bash
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"correo":"luis.estudiante@lescocr.cr","contrasena":"Student1234!"}'
+```
+
+Devuelve `{ "token": "...", "tipo": "Bearer", ... }` (ver credenciales semilla
+en [V10](src/main/resources/db/migration/V10__actualizar_contrasenas_semilla.sql)).
+Ese token va en cada petición protegida: `Authorization: Bearer <token>`.
+
+### Por qué no hay un `JWT_SECRET` por defecto
+
+`application.properties` tenía `app.jwt.secret=${JWT_SECRET:lescocr-jwt-dev-secret-key-...}`
+— un valor de respaldo **committeado al repositorio**. Cualquiera con acceso al
+código (público desde el primer commit que lo agregó) podía leer esa clave y
+firmar sus propios tokens válidos, para cualquier rol, sin saber ninguna
+contraseña — el secreto de firma es lo único que protege un JWT, así que un
+secreto público equivale a que no haya autenticación.
+
+Se quitó el valor de respaldo (`app.jwt.secret=${JWT_SECRET}`, sin default):
+si `JWT_SECRET` no está definida, la aplicación **no arranca**, en vez de
+arrancar silenciosamente con una clave insegura. Fallar al iniciar es
+molesto; emitir tokens firmados con una clave que cualquiera puede leer en
+GitHub es mucho peor.
+
+- **Al correr la app de verdad** (`./gradlew bootRun`), hay que exportar
+  `JWT_SECRET` a mano (ver [«Cómo clonarlo y levantarlo»](#cómo-clonarlo-y-levantarlo)) —
+  Spring Boot no lee `.env` automáticamente, solo Docker Compose lo hace para
+  los contenedores de las bases de datos.
+- **Las pruebas no necesitan nada de esto**: [`AbstractIntegrationTest`](src/test/java/cr/ac/una/lab1/AbstractIntegrationTest.java)
+  inyecta un secreto propio, exclusivo de pruebas, vía `@DynamicPropertySource`
+  — el mismo mecanismo que ya usaba para apuntar Postgres/Mongo a los
+  contenedores de Testcontainers en vez de a `localhost`.
+- El secreto que quedó en el historial de Git ya está comprometido (es
+  público) — si este proyecto se llega a desplegar de verdad, generar uno
+  nuevo (`openssl rand -base64 32`) es obligatorio, no opcional.
+
+---
+
 ## Pruebas Unitarias con Mockito y Cobertura JaCoCo (Laboratorio 4)
 
 A diferencia de las pruebas de [Testcontainers](#cómo-ejecutar-las-pruebas-de-integración-con-testcontainers)
@@ -581,15 +646,25 @@ de datos — por eso corren en milisegundos.
 
 (`./gradlew test` a secas corre además las de Testcontainers, que si necesitan Docker arriba.)
 
-### 42 pruebas unitarias, organizadas por clase
+### 74 pruebas unitarias, organizadas por clase
 
 | Clase | Qué cubre | # |
 |---|---|---|
-| [`MatriculaServiceTest`](src/test/java/cr/ac/una/lab1/business/MatriculaServiceTest.java) | `matricular()`: camino feliz + caminos de regla (estudiante/curso/lección inexistentes, curso no publicado, lección de otro curso, sin cupo, ya matriculado, método de pago no soportado, Strategy que rechaza la referencia). `aprobarPago()`/`cancelarMatricula()`: las 6 transiciones del patrón State, re-chequeo de cupo al aprobar, y que el `Pago` quede `APROBADO`. `obtenerPorId()`/`buscar()` (Lab 5): lectura por id y colección paginada+filtrada vía `MatriculaSpecification`. | 22 |
-| [`CursoServiceTest`](src/test/java/cr/ac/una/lab1/business/CursoServiceTest.java) | `listarCatalogoPublico()`: cálculo de `cuposDisponibles`/`precioFinal`. `publicarCurso()`: camino feliz + las 6 reglas de publicación (curso inexistente, ya publicado, fechas incoherentes, código duplicado, sin lecciones, lección sin instructor, sin recurso multimedia). `obtenerPorId()`/`buscar()` (Lab 5): lectura por id y colección paginada+filtrada vía `CursoSpecification`. | 12 |
+| [`MatriculaServiceTest`](src/test/java/cr/ac/una/lab1/business/MatriculaServiceTest.java) | `matricular()`: camino feliz + caminos de regla (estudiante/curso/lección inexistentes, curso no publicado, lección de otro curso, sin cupo, ya matriculado, método de pago no soportado, Strategy que rechaza la referencia). `aprobarPago()`/`cancelarMatricula()`: las 6 transiciones del patrón State, re-chequeo de cupo al aprobar, y que el `Pago` quede `APROBADO`. `obtenerPorId()`/`buscar()` (Lab 5): lectura paginada+filtrada vía `MatriculaSpecification`, y su verificación de propiedad OWASP API1 (un estudiante no ve matrículas ajenas, ni pasando el `usuarioId` de otro). | 27 |
+| [`CursoServiceTest`](src/test/java/cr/ac/una/lab1/business/CursoServiceTest.java) | `listarCatalogoPublico()`: cálculo de `cuposDisponibles`/`precioFinal`. `publicarCurso()`: camino feliz + las 6 reglas de publicación (curso inexistente, ya publicado, fechas incoherentes, código duplicado, sin lecciones, lección sin instructor, sin recurso multimedia). `obtenerPorId()`/`buscar()`: lectura por id y colección paginada+filtrada vía `CursoSpecification`. | 12 |
+| [`PagoServiceTest`](src/test/java/cr/ac/una/lab1/business/PagoServiceTest.java) | `listar()`: los 4 caminos de filtrado (`estado`/`metodo`/`matriculaId`/sin filtro) y la verificación de propiedad OWASP API1 (estudiante solo ve sus pagos, admin los ve todos). `obtenerPorId()`: propietario, admin, ajeno (403) e inexistente (404). | 11 |
+| [`AuthServiceTest`](src/test/java/cr/ac/una/lab1/business/AuthServiceTest.java) | `login()`: camino feliz (token + datos del usuario), credenciales incorrectas (401 vía `CredencialesInvalidasException`) y usuario autenticado pero inexistente en la BD. | 3 |
+| [`LeccionServiceTest`](src/test/java/cr/ac/una/lab1/business/LeccionServiceTest.java) | `listar()` con y sin filtro de curso; `obtenerPorId()` con y sin instructor asignado (campos nulos en el DTO), e inexistente. | 5 |
+| [`InstructorServiceTest`](src/test/java/cr/ac/una/lab1/business/InstructorServiceTest.java) | `listar()`/`obtenerPorId()`, incluyendo el caso con el `Usuario` sin cargar (campos nulos en el DTO), e inexistente. | 4 |
+| [`UsuarioServiceTest`](src/test/java/cr/ac/una/lab1/business/UsuarioServiceTest.java) | `listar()` con y sin filtro de rol; `obtenerPorId()` existente e inexistente. | 4 |
 | [`ValidadorSinpeMovilTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorSinpeMovilTest.java) | Formato de referencia SINPE (8 dígitos, nula, inválida). | 3 |
 | [`ValidadorTransferenciaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTransferenciaTest.java) | Formato de referencia de transferencia (alfanumérica 6-30, vacía, con espacios). | 3 |
 | [`ValidadorTarjetaTest`](src/test/java/cr/ac/una/lab1/business/strategy/ValidadorTarjetaTest.java) | TARJETA nunca exige referencia al matricular. | 2 |
+
+`AuthServiceTest`, `InstructorServiceTest`, `LeccionServiceTest`, `PagoServiceTest` y
+`UsuarioServiceTest` cubren los servicios que llegaron con la seguridad JWT y el
+resto de la API (login, instructores, lecciones, pagos, usuarios) — antes del
+Laboratorio 5 no tenían ninguna prueba propia.
 
 Los validadores Strategy se prueban dos veces con propósitos distintos: en
 `MatriculaServiceTest` están **mockeados** (se verifica que `MatriculaService`
@@ -608,6 +683,6 @@ así que **el build falla si la cobertura del paquete de negocio baja de 70%**:
 ./gradlew jacocoTestCoverageVerification --tests "cr.ac.una.lab1.business.*"
 ```
 
-Resultado actual: **201 de 203 líneas cubiertas (99%)** — el reporte HTML
+Resultado actual: **326 de 352 líneas cubiertas (92.6%)** — el reporte HTML
 completo queda en `build/reports/jacoco/test/html/index.html` después de correr
 `./gradlew test`.

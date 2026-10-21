@@ -52,5 +52,11 @@ public abstract class AbstractIntegrationTest {
 
         // Configuración dinámica de MongoDB real
         registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
+
+        // app.jwt.secret ya no tiene valor por defecto en application.properties
+        // (a propósito: ver V10 y la nota en .env.example). Las pruebas necesitan
+        // uno propio para que el contexto de Spring arranque; este es exclusivo
+        // de pruebas, nunca se usa fuera de ellas.
+        registry.add("app.jwt.secret", () -> "test-only-secret-never-used-outside-tests-32b");
     }
 }

@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import cr.ac.una.lab1.business.exception.AccesoNoAutorizadoException;
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
 import cr.ac.una.lab1.business.exception.CursoNoPublicadoException;
 import cr.ac.una.lab1.business.exception.EntidadNoEncontradaException;
@@ -406,5 +408,67 @@ class MatriculaServiceTest {
 
         assertThat(resultado.getTotalElements()).isEqualTo(1);
         assertThat(resultado.getContent().get(0).consecutivo()).isEqualTo("MAT-2026-000001");
+    }
+
+    // -----------------------------------------------------------------------
+    // obtenerPorId() / buscar() con verificación de propiedad (OWASP API1)
+    // -----------------------------------------------------------------------
+
+    @Test
+    void obtenerPorId_conAuth_propietario_retornaDTO() {
+        Matricula matricula = matriculaPersistida(EstadoMatricula.ACTIVA);
+        ReflectionTestUtils.setField(matricula, "curso", curso);
+        when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+
+        // estudiante.getCorreo() == "luis@lescocr.cr" (fixture de setUp)
+        MatriculaResponseDTO dto = service.obtenerPorId(1L, "luis@lescocr.cr", false);
+
+        assertThat(dto.consecutivo()).isEqualTo("MAT-2026-000001");
+    }
+
+    @Test
+    void obtenerPorId_conAuth_ajeno_lanzaAccesoNoAutorizado() {
+        Matricula matricula = matriculaPersistida(EstadoMatricula.ACTIVA);
+        ReflectionTestUtils.setField(matricula, "curso", curso);
+        when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+
+        assertThatThrownBy(() -> service.obtenerPorId(1L, "otro.estudiante@lescocr.cr", false))
+                .isInstanceOf(AccesoNoAutorizadoException.class);
+    }
+
+    @Test
+    void obtenerPorId_conAuth_administrador_puedeVerCualquierMatricula() {
+        Matricula matricula = matriculaPersistida(EstadoMatricula.ACTIVA);
+        ReflectionTestUtils.setField(matricula, "curso", curso);
+        when(matriculaRepository.findById(1L)).thenReturn(Optional.of(matricula));
+
+        MatriculaResponseDTO dto = service.obtenerPorId(1L, "admin@lescocr.cr", true);
+
+        assertThat(dto.consecutivo()).isEqualTo("MAT-2026-000001");
+    }
+
+    @Test
+    void buscar_conAuth_estudiante_resuelveSuPropioUsuarioIdAntesDeFiltrar() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(usuarioRepository.findByCorreo("luis@lescocr.cr")).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        // usuarioId=999 es de otro estudiante; el servicio debe ignorarlo y usar el propio (4L).
+        service.buscar(999L, null, null, null, null, null, null, pageable, "luis@lescocr.cr", false);
+
+        verify(usuarioRepository).findByCorreo("luis@lescocr.cr");
+    }
+
+    @Test
+    void buscar_conAuth_administrador_noFuerzaElFiltroDeUsuario() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(matriculaRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        service.buscar(999L, null, null, null, null, null, null, pageable, "admin@lescocr.cr", true);
+
+        // Admin: usa el usuarioId tal cual vino en la petición, no hace falta resolver su propio id.
+        verify(usuarioRepository, never()).findByCorreo(any());
     }
 }

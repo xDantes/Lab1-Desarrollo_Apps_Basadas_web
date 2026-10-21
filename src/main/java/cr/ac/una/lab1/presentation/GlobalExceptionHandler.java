@@ -2,6 +2,7 @@ package cr.ac.una.lab1.presentation;
 
 import cr.ac.una.lab1.business.exception.AccesoNoAutorizadoException;
 import cr.ac.una.lab1.business.exception.CambioEstadoInvalidoException;
+import cr.ac.una.lab1.business.exception.CredencialesInvalidasException;
 import cr.ac.una.lab1.business.exception.EntidadNoEncontradaException;
 import cr.ac.una.lab1.business.exception.MatriculaDuplicadaException;
 import cr.ac.una.lab1.business.exception.ReglaNegocioException;
@@ -9,10 +10,13 @@ import cr.ac.una.lab1.business.exception.SinCupoDisponibleException;
 import java.net.URI;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Traduce cada excepción del dominio a <strong>Problem Details</strong>
@@ -27,11 +31,24 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * para poder darles un {@code status}/{@code type} más preciso (409, no 422):
  * Spring resuelve siempre por el tipo más específico declarado, sin importar
  * el orden de los métodos en esta clase.
+ *
+ * <p><strong>Ojo con {@code @ExceptionHandler(Exception.class)}:</strong> al
+ * capturar todo, también capturaba excepciones que Spring ya sabe traducir
+ * correctamente por su cuenta ({@link HttpMessageNotReadableException} → 400,
+ * {@link NoResourceFoundException} → 404), convirtiéndolas en 500. Por eso
+ * cada una de esas tiene su propio handler explícito aquí: más específico que
+ * {@code Exception}, así que Spring lo usa en vez del genérico.
  */
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
     private static final String TYPE_BASE = "https://lescocr.cr/problems/";
+
+    /** 401 — el login falló: correo inexistente o contraseña incorrecta. */
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    ProblemDetail handleCredencialesInvalidas(CredencialesInvalidasException ex) {
+        return problema(HttpStatus.UNAUTHORIZED, "Credenciales inválidas", "credenciales-invalidas", ex.getMessage());
+    }
 
     /** 404 — la entidad referenciada (por id) no existe. */
     @ExceptionHandler(EntidadNoEncontradaException.class)
@@ -87,6 +104,20 @@ class GlobalExceptionHandler {
     ProblemDetail handleTipoInvalido(MethodArgumentTypeMismatchException ex) {
         String detalle = "El valor '" + ex.getValue() + "' no es válido para el parámetro '" + ex.getName() + "'.";
         return problema(HttpStatus.BAD_REQUEST, "Parámetro inválido", "parametro-invalido", detalle);
+    }
+
+    /** 400 — el cuerpo de la petición no es JSON válido o no calza con el DTO esperado. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ProblemDetail handleCuerpoInvalido(HttpMessageNotReadableException ex) {
+        return problema(HttpStatus.BAD_REQUEST, "Cuerpo de la petición inválido", "cuerpo-invalido",
+                "El cuerpo de la petición no es JSON válido o no corresponde al formato esperado.");
+    }
+
+    /** 404 — no existe ningún endpoint para esa ruta (o para ese verbo en esa ruta). */
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    ProblemDetail handleRutaNoEncontrada(Exception ex) {
+        return problema(HttpStatus.NOT_FOUND, "Ruta no encontrada", "ruta-no-encontrada",
+                "No existe ningún endpoint para esta ruta.");
     }
 
     /**

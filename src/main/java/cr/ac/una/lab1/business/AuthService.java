@@ -1,6 +1,6 @@
 package cr.ac.una.lab1.business;
 
-import cr.ac.una.lab1.business.exception.ReglaNegocioException;
+import cr.ac.una.lab1.business.exception.CredencialesInvalidasException;
 import cr.ac.una.lab1.config.JwtTokenProvider;
 import cr.ac.una.lab1.data.UsuarioRepository;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -37,8 +37,8 @@ public class AuthService {
     /**
      * Verifica credenciales y devuelve un {@link LoginResponseDTO} con el JWT.
      *
-     * @throws ReglaNegocioException (422 → manejado como 401 en el controlador) si
-     *         las credenciales son incorrectas.
+     * @throws CredencialesInvalidasException (401) si las credenciales son incorrectas
+     *         o el usuario autenticado no existe en la base de datos.
      */
     public LoginResponseDTO login(LoginRequestDTO dto) {
         try {
@@ -47,7 +47,7 @@ public class AuthService {
 
             // Recuperamos el usuario desde la BD para incluir rol, id y nombre en la respuesta
             var usuario = usuarioRepository.findByCorreo(dto.correo())
-                    .orElseThrow(() -> new ReglaNegocioException("Usuario no encontrado."));
+                    .orElseThrow(() -> new CredencialesInvalidasException("Usuario no encontrado."));
 
             String rol = usuario.getRol().name();
             String token = tokenProvider.generarToken(auth.getName(), rol);
@@ -55,7 +55,7 @@ public class AuthService {
 
         } catch (AuthenticationException e) {
             // No exponemos si el correo no existe vs. contraseña incorrecta (OWASP API2)
-            throw new ReglaNegocioException("Credenciales incorrectas.");
+            throw new CredencialesInvalidasException("Credenciales incorrectas.");
         }
     }
 }

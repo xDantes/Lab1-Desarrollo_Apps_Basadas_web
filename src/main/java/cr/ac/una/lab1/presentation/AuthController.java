@@ -35,7 +35,7 @@ class AuthController {
      * POST /auth/login — emite un JWT si las credenciales son correctas.
      *
      * <p>Devuelve 200 con el token, 400 si el cuerpo es inválido
-     * (correo o contraseña ausentes) y 422 si las credenciales son incorrectas.
+     * (correo o contraseña ausentes) y 401 si las credenciales son incorrectas.
      */
     @PostMapping("/login")
     @SecurityRequirements   // este endpoint no requiere token

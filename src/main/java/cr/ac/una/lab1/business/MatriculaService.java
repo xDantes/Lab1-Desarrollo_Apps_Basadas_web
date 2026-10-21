@@ -208,6 +208,21 @@ public class MatriculaService {
     }
 
     /**
+     * Versión con verificación de propiedad (OWASP API1).
+     * Un ESTUDIANTE solo puede consultar sus propias matrículas; un
+     * ADMINISTRADOR puede consultar cualquiera.
+     */
+    @Transactional(readOnly = true)
+    public MatriculaResponseDTO obtenerPorId(Long id, String correoAutenticado, boolean esAdmin) {
+        Matricula m = obtenerMatricula(id);
+        if (!esAdmin && !m.getUsuario().getCorreo().equals(correoAutenticado)) {
+            throw new AccesoNoAutorizadoException(
+                    "Un estudiante solo puede consultar sus propias matrículas (OWASP API1).");
+        }
+        return toResponseDTO(m, m.getCurso(), m.getPago());
+    }
+
+    /**
      * Colección paginada y filtrable de matrículas (patrón Specification, ver
      * {@link MatriculaSpecification}). Todos los filtros son opcionales; el
      * orden y el tamaño de página los resuelve Spring a partir de
@@ -222,6 +237,31 @@ public class MatriculaService {
                 usuarioId, cursoId, estado, fechaDesde, fechaHasta, precioFinalMin, precioFinalMax);
         return matriculaRepository.findAll(filtros, pageable)
                 .map(m -> toResponseDTO(m, m.getCurso(), m.getPago()));
+    }
+
+    /**
+     * Versión con verificación de propiedad (OWASP API1).
+     *
+     * <p>Si quien llama no es ADMINISTRADOR, el filtro {@code usuarioId} se
+     * <strong>fuerza</strong> al id del usuario autenticado — se ignora
+     * cualquier valor que haya llegado en la petición. Así un ESTUDIANTE
+     * nunca puede listar matrículas ajenas, ni pidiéndolas sin filtro ni
+     * mandando el id de otro usuario a propósito.
+     */
+    @Transactional(readOnly = true)
+    public Page<MatriculaResponseDTO> buscar(
+            Long usuarioId, Long cursoId, EstadoMatricula estado,
+            OffsetDateTime fechaDesde, OffsetDateTime fechaHasta,
+            BigDecimal precioFinalMin, BigDecimal precioFinalMax, Pageable pageable,
+            String correoAutenticado, boolean esAdmin) {
+        Long usuarioIdFiltro = usuarioId;
+        if (!esAdmin) {
+            Usuario autenticado = usuarioRepository.findByCorreo(correoAutenticado)
+                    .orElseThrow(() -> new EntidadNoEncontradaException("Usuario", correoAutenticado));
+            usuarioIdFiltro = autenticado.getId();
+        }
+        return buscar(usuarioIdFiltro, cursoId, estado, fechaDesde, fechaHasta,
+                precioFinalMin, precioFinalMax, pageable);
     }
 
     // -----------------------------------------------------------------------

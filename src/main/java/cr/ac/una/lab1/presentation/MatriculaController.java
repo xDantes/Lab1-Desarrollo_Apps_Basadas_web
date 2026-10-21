@@ -57,17 +57,27 @@ class MatriculaController {
         return ResponseEntity.created(ubicacion).body(respuesta);
     }
 
-    /** GET /api/v1/matriculas/{id} — una matrícula. 404 si no existe. */
+    /**
+     * GET /api/v1/matriculas/{id} — una matrícula. 404 si no existe.
+     *
+     * <p>OWASP API1: un ESTUDIANTE solo puede leer sus propias matrículas
+     * (403 si intenta leer una ajena); un ADMINISTRADOR puede leer cualquiera.
+     */
     @GetMapping("/{id}")
     @Operation(summary = "Obtener matrícula por ID")
-    MatriculaResponseDTO obtener(@PathVariable Long id) {
-        return matriculaService.obtenerPorId(id);
+    MatriculaResponseDTO obtener(@PathVariable Long id, Authentication auth) {
+        boolean esAdmin = tieneRol(auth, "ROLE_ADMINISTRADOR");
+        return matriculaService.obtenerPorId(id, auth.getName(), esAdmin);
     }
 
     /**
      * GET /api/v1/matriculas — colección paginada y filtrable (patrón Specification).
      * Filtros opcionales: {@code usuarioId}, {@code cursoId}, {@code estado},
      * {@code fechaDesde}, {@code fechaHasta}, {@code precioFinalMin}, {@code precioFinalMax}.
+     *
+     * <p>OWASP API1: si quien llama no es ADMINISTRADOR, el servicio ignora el
+     * {@code usuarioId} recibido y fuerza el filtro al usuario autenticado —
+     * un ESTUDIANTE nunca ve matrículas ajenas en esta colección.
      */
     @GetMapping
     @Operation(summary = "Buscar matrículas")
@@ -79,10 +89,12 @@ class MatriculaController {
             @RequestParam(required = false) OffsetDateTime fechaHasta,
             @RequestParam(required = false) BigDecimal precioFinalMin,
             @RequestParam(required = false) BigDecimal precioFinalMax,
-            @PageableDefault(size = 10, sort = "fecha") Pageable pageable) {
+            @PageableDefault(size = 10, sort = "fecha") Pageable pageable,
+            Authentication auth) {
+        boolean esAdmin = tieneRol(auth, "ROLE_ADMINISTRADOR");
         return matriculaService.buscar(
                 usuarioId, cursoId, estado, fechaDesde, fechaHasta,
-                precioFinalMin, precioFinalMax, pageable);
+                precioFinalMin, precioFinalMax, pageable, auth.getName(), esAdmin);
     }
 
     /**
