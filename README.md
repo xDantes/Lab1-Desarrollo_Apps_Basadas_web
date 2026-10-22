@@ -855,3 +855,26 @@ así que **el build falla si la cobertura del paquete de negocio baja de 70%**:
 Resultado actual: **326 de 352 líneas cubiertas (92.6%)** — el reporte HTML
 completo queda en `build/reports/jacoco/test/html/index.html` después de correr
 `./gradlew test`.
+
+---
+
+## Despliegue en producción (Laboratorio 6)
+
+- **API**: <https://lescocr-api.onrender.com>
+- **SPA**: <https://lescocr-spa.onrender.com>
+- **Swagger UI**: <https://lescocr-api.onrender.com/swagger-ui.html>
+
+### Credenciales de prueba por rol
+
+Usuarios semilla (ver [V3](src/main/resources/db/migration/V3__datos_semilla_usuario_curso.sql)
+y [V10](src/main/resources/db/migration/V10__actualizar_contrasenas_semilla.sql)):
+
+| Rol | Correo | Contraseña |
+|---|---|---|
+| ADMINISTRADOR | `admin@lescocr.cr` | `Admin1234!` |
+| INSTRUCTOR | `carlos.instructor@lescocr.cr` | `Admin1234!` |
+| ESTUDIANTE | `luis.estudiante@lescocr.cr` | `Student1234!` |
+
+Servicios gestionados por detrás (no accesibles desde fuera de la API): PostgreSQL
+en Neon.tech y MongoDB en Atlas, ambos con conexión TLS/SSL — ver
+[Guía de despliegue](docs/DESPLIEGUE.md) para el paso a paso completo.
