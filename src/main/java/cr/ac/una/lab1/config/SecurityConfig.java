@@ -2,6 +2,8 @@ package cr.ac.una.lab1.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -71,6 +73,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
     private static final String TYPE_BASE = "https://lescocr.cr/problems/";
 
     private final JwtAuthenticationFilter jwtFilter;
@@ -132,6 +135,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Público
                 .requestMatchers("/auth/login").permitAll()
+                .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/cursos", "/api/v1/cursos/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/instructores", "/api/v1/instructores/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/lecciones", "/api/v1/lecciones/**").permitAll()
@@ -154,6 +158,8 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex
                 // 401 — sin token o token inválido
                 .authenticationEntryPoint((req, res, e) -> {
+                    log.warn("Evento de seguridad: petición no autenticada (401) en ruta '{}' [{}]",
+                            req.getRequestURI(), req.getMethod());
                     res.setStatus(HttpStatus.UNAUTHORIZED.value());
                     res.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
                     ProblemDetail pd = problemDetail(
@@ -165,6 +171,9 @@ public class SecurityConfig {
                 })
                 // 403 — token válido pero sin el rol requerido
                 .accessDeniedHandler((req, res, e) -> {
+                    String principal = (req.getUserPrincipal() != null) ? req.getUserPrincipal().getName() : "anónimo";
+                    log.warn("Evento de seguridad: acceso denegado (403) para usuario '{}' en ruta '{}' [{}]",
+                            principal, req.getRequestURI(), req.getMethod());
                     res.setStatus(HttpStatus.FORBIDDEN.value());
                     res.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
                     ProblemDetail pd = problemDetail(

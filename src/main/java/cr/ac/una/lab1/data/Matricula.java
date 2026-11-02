@@ -16,6 +16,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
@@ -56,6 +57,10 @@ public class Matricula {
 
     @OneToOne(mappedBy = "matricula", fetch = FetchType.LAZY)
     private Pago pago;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 
     protected Matricula() {
         // requerido por JPA
@@ -116,6 +121,7 @@ public class Matricula {
     public BigDecimal getPrecioFinal()    { return precioFinal; }
     public OffsetDateTime getFecha()      { return fecha; }
     public Pago getPago()                 { return pago; }
+    public Long getVersion()              { return version; }
 
     // -----------------------------------------------------------------------
     // Helper privado
