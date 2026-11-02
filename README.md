@@ -18,6 +18,7 @@ Desarrollado por: Derrek Adrián Ureña Solís y José Arrieta Sancho.
 - [Patrones de diseño](docs/patrones.md) — State y Strategy, con la señal que los justificó.
 - [Guía de despliegue](docs/DESPLIEGUE.md) — servicios gestionados, variables de entorno y diagrama de despliegue.
 - [Módulo MVC con Thymeleaf](#módulo-mvc-con-thymeleaf-laboratorio-6) — vistas con sesión, CSRF y PRG, aparte de la API REST stateless.
+- [Concurrencia y Observabilidad](#concurrencia-controlada-y-observabilidad-laboratorio-7) — bloqueo optimista (@Version), 409 Problem Details, /actuator/health y registros estructurados JSON con eventos de seguridad.
 
 ## Requisitos previos
 
@@ -878,3 +879,28 @@ y [V10](src/main/resources/db/migration/V10__actualizar_contrasenas_semilla.sql)
 Servicios gestionados por detrás (no accesibles desde fuera de la API): PostgreSQL
 en Neon.tech y MongoDB en Atlas, ambos con conexión TLS/SSL — ver
 [Guía de despliegue](docs/DESPLIEGUE.md) para el paso a paso completo.
+
+---
+
+## Concurrencia Controlada y Observabilidad (Laboratorio 7)
+
+### 1. Concurrencia Controlada (Bloqueo Optimista)
+
+> **Justificación de contención en el dominio:**
+> La transición de estado de una matrícula (`aprobarPago` por parte de un administrador vs. `cancelarMatricula` por parte del estudiante o doble aprobación concurrente) presenta contención real en el dominio porque dos usuarios pueden intentar modificar simultáneamente el estado del mismo registro; el bloqueo optimista con `@Version` evita que una transacción sobrescriba silenciosamente a la otra (*lost updates*), traduciendo el conflicto a un código HTTP 409 (Conflict).
+
+- **Entidad**: [`Matricula`](src/main/java/cr/ac/una/lab1/data/Matricula.java) cuenta con el campo `@Version private Long version = 0L`.
+- **Migración Flyway**: [`V11__agregar_version_matricula.sql`](src/main/resources/db/migration/V11__agregar_version_matricula.sql) añade la columna `version BIGINT NOT NULL DEFAULT 0` en la tabla `matricula`.
+- **Manejo del conflicto (HTTP 409)**: [`GlobalExceptionHandler`](src/main/java/cr/ac/una/lab1/presentation/GlobalExceptionHandler.java) captura `OptimisticLockingFailureException` y `OptimisticLockException`, emitiendo una respuesta RFC 9457 (Problem Details) con `status: 409`, título `Conflicto de concurrencia` y tipo `https://lescocr.cr/problems/conflicto-concurrencia`.
+- **Prueba automatizada del conflicto**: [`ConcurrenciaIntegrationTest`](src/test/java/cr/ac/una/lab1/ConcurrenciaIntegrationTest.java) simula dos transacciones concurrentes sobre la misma matrícula y verifica que la segunda falle con `OptimisticLockException`, así como la traducción a Problem Details 409.
+
+### 2. Observabilidad Mínima
+
+- **Endpoint de salud**: `/actuator/health` está expuesto públicamente para chequeos de orquestación y balanceadores de carga, configurado con `management.endpoint.health.show-details=never` para devolver exclusivamente el estado general (`{"status":"UP"}`) sin exponer detalles internos de componentes ni configuraciones.
+- **Registros estructurados en stdout**: implementados mediante [`StructuredJsonLayout`](src/main/java/cr/ac/una/lab1/config/StructuredJsonLayout.java) en [`logback-spring.xml`](src/main/resources/logback-spring.xml), emitiendo cada entrada de registro en formato JSON estándar (`timestamp`, `level`, `logger`, `thread`, `message`, `exception`) directamente a la salida estándar (`stdout`) para recolección en contenedores y plataformas cloud.
+- **Auditoría de eventos de seguridad**: se registran con nivel `WARN`/`INFO` en formato estructurado:
+  - Inicios de sesión fallidos (por usuario no encontrado o contraseña incorrecta, en [`AuthService`](src/main/java/cr/ac/una/lab1/business/AuthService.java)).
+  - Accesos no autenticados (401) y accesos denegados por rol (403, en [`SecurityConfig`](src/main/java/cr/ac/una/lab1/config/SecurityConfig.java)).
+  - Violación de propiedad de recursos (403 / OWASP API1, en [`GlobalExceptionHandler`](src/main/java/cr/ac/una/lab1/presentation/GlobalExceptionHandler.java)).
+  - Conflictos de concurrencia (409) detectados por el bloqueo optimista.
+  - **Seguridad estricta**: ninguna traza de log incluye contraseñas, secretos ni tokens JWT.
