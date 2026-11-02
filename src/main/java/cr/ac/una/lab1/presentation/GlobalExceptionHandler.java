@@ -8,6 +8,9 @@ import cr.ac.una.lab1.business.exception.MatriculaDuplicadaException;
 import cr.ac.una.lab1.business.exception.ReglaNegocioException;
 import cr.ac.una.lab1.business.exception.SinCupoDisponibleException;
 import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -40,13 +43,15 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * {@code Exception}, así que Spring lo usa en vez del genérico.
  */
 @RestControllerAdvice
-class GlobalExceptionHandler {
+public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String TYPE_BASE = "https://lescocr.cr/problems/";
 
     /** 401 — el login falló: correo inexistente o contraseña incorrecta. */
     @ExceptionHandler(CredencialesInvalidasException.class)
     ProblemDetail handleCredencialesInvalidas(CredencialesInvalidasException ex) {
+        log.warn("Evento de seguridad: fallo de autenticación (401) — {}", ex.getMessage());
         return problema(HttpStatus.UNAUTHORIZED, "Credenciales inválidas", "credenciales-invalidas", ex.getMessage());
     }
 
@@ -62,24 +67,39 @@ class GlobalExceptionHandler {
      */
     @ExceptionHandler(AccesoNoAutorizadoException.class)
     ProblemDetail handleAccesoNoAutorizado(AccesoNoAutorizadoException ex) {
+        log.warn("Evento de seguridad: acceso denegado (403) por verificación de propiedad OWASP API1 — {}", ex.getMessage());
         return problema(HttpStatus.FORBIDDEN, "Acceso denegado", "acceso-no-autorizado", ex.getMessage());
+    }
+
+    /**
+     * 409 — Conflicto de concurrencia: otro usuario modificó la entidad simultáneamente
+     * (bloqueo optimista con @Version).
+     */
+    @ExceptionHandler({OptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class})
+    public ProblemDetail handleConflictoConcurrencia(Exception ex) {
+        log.warn("Evento de seguridad: conflicto de concurrencia detectado (bloqueo optimista 409) — {}", ex.getMessage());
+        return problema(HttpStatus.CONFLICT, "Conflicto de concurrencia", "conflicto-concurrencia",
+                "El recurso fue modificado simultáneamente por otro usuario. Por favor, recargue e intente de nuevo.");
     }
 
     /** 409 — se intentó una transición de estado que el ciclo de vida no permite (patrón State). */
     @ExceptionHandler(CambioEstadoInvalidoException.class)
     ProblemDetail handleCambioEstadoInvalido(CambioEstadoInvalidoException ex) {
+        log.warn("Conflicto de estado (409): {}", ex.getMessage());
         return problema(HttpStatus.CONFLICT, "Transición de estado inválida", "cambio-estado-invalido", ex.getMessage());
     }
 
     /** 409 — el estudiante ya tiene una matrícula vigente en ese curso. */
     @ExceptionHandler(MatriculaDuplicadaException.class)
     ProblemDetail handleMatriculaDuplicada(MatriculaDuplicadaException ex) {
+        log.warn("Conflicto de matrícula duplicada (409): {}", ex.getMessage());
         return problema(HttpStatus.CONFLICT, "Matrícula duplicada", "matricula-duplicada", ex.getMessage());
     }
 
     /** 409 — el curso no tiene cupo disponible (al matricular o al aprobar un pago tardío). */
     @ExceptionHandler(SinCupoDisponibleException.class)
     ProblemDetail handleSinCupo(SinCupoDisponibleException ex) {
+        log.warn("Conflicto de cupo disponible (409): {}", ex.getMessage());
         return problema(HttpStatus.CONFLICT, "Sin cupo disponible", "sin-cupo-disponible", ex.getMessage());
     }
 

@@ -251,6 +251,37 @@ class ApiSecurityIntegrationTest extends AbstractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
+    // Observabilidad: /actuator/health público y sin detalles
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(9)
+    @DisplayName("Observabilidad: GET /actuator/health es público y sin detalles sensibles")
+    void test_actuatorHealth_publicoYSinDetalles() {
+        ResponseEntity<String> resp = restTemplate.getForEntity(url("/actuator/health"), String.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).contains("\"status\":\"UP\"");
+        assertThat(resp.getBody()).doesNotContain("components");
+        assertThat(resp.getBody()).doesNotContain("details");
+    }
+
+    // -----------------------------------------------------------------------
+    // Seguridad: login con credenciales incorrectas (401)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(10)
+    @DisplayName("API 401: POST /auth/login con credenciales incorrectas es rechazado")
+    void test_401_loginCredencialesIncorrectas() {
+        LoginRequestDTO req = new LoginRequestDTO(STUDENT_CORREO, "PasswordIncorrecta999!");
+        ResponseEntity<String> resp = restTemplate.postForEntity(url("/auth/login"), req, String.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(resp.getBody()).contains("credenciales-invalidas");
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
