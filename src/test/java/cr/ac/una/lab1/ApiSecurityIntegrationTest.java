@@ -80,6 +80,8 @@ class ApiSecurityIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeAll
     void setUp() {
+        restTemplate.getRestTemplate().setRequestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());
+
         // Crear usuarios de prueba con hashes BCrypt reales
         Usuario admin = new Usuario("Admin Test", "9-0000-0001",
                 ADMIN_CORREO, passwordEncoder.encode(ADMIN_PASS), RolUsuario.ADMINISTRADOR);
