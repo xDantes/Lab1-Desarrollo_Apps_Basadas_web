@@ -27,13 +27,6 @@ export default function LoginForm() {
     }
   };
 
-  // Helper para autocompletar credenciales en ambiente de prueba
-  const handleQuickFill = (email, pass) => {
-    setCorreo(email);
-    setContrasena(pass);
-    setError(null);
-  };
-
   return (
     <div className="login-wrapper">
       <div className="login-card">
@@ -96,28 +89,6 @@ export default function LoginForm() {
             {loading ? 'Validando...' : 'Entrar al Sistema'}
           </button>
         </form>
-
-        <div className="test-accounts">
-          <div className="test-accounts-title">Cuentas de Prueba para Evaluación</div>
-          <div className="test-accounts-grid">
-            <button
-              type="button"
-              className="btn-chip"
-              onClick={() => handleQuickFill('luis.estudiante@lescocr.cr', 'Student1234!')}
-            >
-              <strong>Estudiante</strong>
-              <span>luis.estudiante@lescocr.cr</span>
-            </button>
-            <button
-              type="button"
-              className="btn-chip"
-              onClick={() => handleQuickFill('admin@lescocr.cr', 'Admin1234!')}
-            >
-              <strong>Administrador</strong>
-              <span>admin@lescocr.cr</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
