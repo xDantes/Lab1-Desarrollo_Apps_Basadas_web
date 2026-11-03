@@ -1,13 +1,19 @@
 package cr.ac.una.lab1;
 
 import cr.ac.una.lab1.data.EstadoMatricula;
+import cr.ac.una.lab1.data.Leccion;
+import cr.ac.una.lab1.data.LeccionRepository;
 import cr.ac.una.lab1.data.Matricula;
 import cr.ac.una.lab1.data.MatriculaRepository;
+import cr.ac.una.lab1.data.RolUsuario;
+import cr.ac.una.lab1.data.Usuario;
+import cr.ac.una.lab1.data.UsuarioRepository;
 import cr.ac.una.lab1.presentation.GlobalExceptionHandler;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.RollbackException;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -42,19 +48,38 @@ class ConcurrenciaIntegrationTest extends AbstractIntegrationTest {
     private MatriculaRepository matriculaRepository;
 
     @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private LeccionRepository leccionRepository;
+
+    @Autowired
     private GlobalExceptionHandler globalExceptionHandler;
 
     @Test
     @Order(1)
     @DisplayName("Concurrencia: dos transacciones concurrentes sobre la misma matrícula provocan OptimisticLockException")
     void test1_ConflictoConcurrencia_BloqueoOptimista_ProvocaExcepcion() {
-        // Obtenemos una matrícula existente de los datos semilla (ej. id 1, creada en V8)
-        Matricula semilla = matriculaRepository.findAll().stream()
-                .filter(m -> m.getEstado() == EstadoMatricula.PENDIENTE)
-                .findFirst()
-                .orElseGet(() -> matriculaRepository.findAll().get(0));
+        Usuario testUser = usuarioRepository.findByCorreo("concurrencia@test.cr")
+                .orElseGet(() -> usuarioRepository.save(new Usuario(
+                        "Test Concurrencia",
+                        "9-9999-0001",
+                        "concurrencia@test.cr",
+                        "$2a$10$hashconcurrencia000000000000000000000000",
+                        RolUsuario.ESTUDIANTE
+                )));
+        matriculaRepository.findByConsecutivo("MAT-CONCURRENTE")
+                .ifPresent(matriculaRepository::delete);
 
-        Long matriculaId = semilla.getId();
+        Leccion leccion = leccionRepository.findAll().get(0);
+        Matricula testMatricula = matriculaRepository.save(new Matricula(
+                "MAT-CONCURRENTE",
+                testUser,
+                leccion,
+                EstadoMatricula.PENDIENTE,
+                new BigDecimal("50000.00")
+        ));
+        Long matriculaId = testMatricula.getId();
 
         // Creamos dos EntityManager independientes que simulan dos hilos/usuarios distintos
         EntityManager em1 = entityManagerFactory.createEntityManager();
@@ -91,6 +116,12 @@ class ConcurrenciaIntegrationTest extends AbstractIntegrationTest {
             if (em2.getTransaction().isActive()) em2.getTransaction().rollback();
             em1.close();
             em2.close();
+            if (matriculaId != null) {
+                matriculaRepository.deleteById(matriculaId);
+            }
+            if (testUser != null) {
+                usuarioRepository.delete(testUser);
+            }
         }
     }
 
