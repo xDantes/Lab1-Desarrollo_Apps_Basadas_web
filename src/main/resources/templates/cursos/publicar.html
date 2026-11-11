@@ -10,13 +10,19 @@
         nav .brand { font-weight:bold; margin-right:auto; }
         nav a { color:#fff; text-decoration:none; font-size:.9rem; }
         nav button { background:none; border:1px solid #fff; color:#fff; padding:.3rem .7rem; border-radius:4px; cursor:pointer; }
-        main { max-width:480px; margin:2rem auto; padding:1.5rem; background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+        main { max-width:500px; margin:2rem auto; padding:1.5rem; background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
         h1 { font-size:1.2rem; margin-top:0; }
-        dl { font-size:.9rem; }
+        dl { font-size:.9rem; margin-bottom:1.2rem; }
         dt { color:#666; }
-        dd { margin:0 0 .75rem; }
-        button.confirm { padding:.6rem 1.2rem; background:#7a1f2b; color:#fff; border:none; border-radius:4px; cursor:pointer; }
-        a.cancel { margin-left:.75rem; font-size:.9rem; color:#555; }
+        dd { margin:0 0 .5rem; font-weight:500; }
+        label { display:block; margin:.9rem 0 .3rem; font-size:.85rem; color:#444; }
+        select, input, textarea { width:100%; padding:.55rem; box-sizing:border-box; border:1px solid #ccc; border-radius:4px; font-size:.95rem; font-family:inherit; }
+        .field-error { color:#8a1f1f; font-size:.8rem; margin-top:.25rem; }
+        .checkbox-container { display:flex; align-items:flex-start; gap:.5rem; margin-top:1.2rem; }
+        .checkbox-container input { width:auto; margin-top:.2rem; cursor:pointer; }
+        .checkbox-container label { margin:0; font-size:.85rem; color:#333; cursor:pointer; }
+        button.confirm { margin-top:1.5rem; padding:.6rem 1.2rem; background:#7a1f2b; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:.9rem; }
+        a.cancel { margin-left:.75rem; font-size:.9rem; color:#555; text-decoration:none; }
         .msg { padding:.6rem .75rem; border-radius:4px; margin-bottom:1rem; font-size:.85rem; }
         .error { background:#fde2e2; color:#8a1f1f; }
     </style>
@@ -43,12 +49,25 @@
         <dt>Fechas</dt><dd th:text="${curso.fechaInicio} + ' — ' + ${curso.fechaFin}"></dd>
     </dl>
 
-    <p>Se van a verificar las reglas de publicación (lecciones, instructor
-        asignado y recurso multimedia) antes de activarlo en el catálogo.</p>
+    <p style="font-size:.85rem; color:#555;">Complete los datos del formulario de publicación. Se validarán los campos y las reglas de negocio (lecciones, instructores y multimedia) antes de activar el curso en el catálogo.</p>
 
-    <!-- th:action ya inyecta el token CSRF; el administrador que autoriza se
-         resuelve en el controlador a partir de la sesión, no de este formulario. -->
-    <form th:action="@{/mvc/cursos/{id}/publicar(id=${curso.id})}" method="post">
+    <!-- th:object + th:field enlazan contra PublicarCursoFormDTO con Bean Validation y BindingResult;
+         th:action ya inyecta el token CSRF; el administrador que autoriza se resuelve de la sesión. -->
+    <form th:action="@{/mvc/cursos/{id}/publicar(id=${curso.id})}" th:object="${form}" method="post">
+        <label for="fechaPublicacion">Fecha de publicación</label>
+        <input id="fechaPublicacion" th:field="*{fechaPublicacion}" type="date">
+        <p class="field-error" th:if="${#fields.hasErrors('fechaPublicacion')}" th:errors="*{fechaPublicacion}"></p>
+
+        <label for="justificacion">Justificación o notas de publicación</label>
+        <textarea id="justificacion" th:field="*{justificacion}" rows="3" placeholder="Ej: Temario validado y lecciones listas para el inicio del ciclo."></textarea>
+        <p class="field-error" th:if="${#fields.hasErrors('justificacion')}" th:errors="*{justificacion}"></p>
+
+        <div class="checkbox-container">
+            <input type="checkbox" id="confirmarRequisitos" th:field="*{confirmarRequisitos}">
+            <label for="confirmarRequisitos">Confirmo que el curso cuenta con las lecciones, instructores y recursos requeridos.</label>
+        </div>
+        <p class="field-error" th:if="${#fields.hasErrors('confirmarRequisitos')}" th:errors="*{confirmarRequisitos}"></p>
+
         <button type="submit" class="confirm">Confirmar publicación</button>
         <a class="cancel" th:href="@{/mvc/cursos}">Cancelar</a>
     </form>
