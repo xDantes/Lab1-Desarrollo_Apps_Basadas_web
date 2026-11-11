@@ -4,13 +4,16 @@ import cr.ac.una.lab1.business.CursoCatalogoDTO;
 import cr.ac.una.lab1.business.CursoService;
 import cr.ac.una.lab1.business.PublicarCursoRequestDTO;
 import cr.ac.una.lab1.business.UsuarioService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +22,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 /**
  * Módulo MVC con Thymeleaf (Laboratorio 6) — caso de uso 2: catálogo de cursos
  * y su publicación. Reutiliza {@link CursoService} tal cual lo usa la API REST.
+ *
+ * <p>El formulario de publicación está respaldado por {@link PublicarCursoFormDTO}
+ * con Bean Validation ({@code @Valid} y {@link BindingResult}), mostrando errores de campo
+ * inline y errores de reglas de negocio en la re-renderización del formulario.
  */
 @Controller
 @RequestMapping("/mvc/cursos")
@@ -40,25 +47,38 @@ class CursoMvcController {
         return "cursos/listado";
     }
 
-    /** GET /mvc/cursos/{id}/publicar — confirmación (solo ADMINISTRADOR, ver SecurityConfig). */
+    /** GET /mvc/cursos/{id}/publicar — formulario validado (solo ADMINISTRADOR, ver SecurityConfig). */
     @GetMapping("/{id}/publicar")
     String formularioPublicar(@PathVariable Long id, Model model) {
         model.addAttribute("curso", cursoService.obtenerPorId(id));
+        if (!model.containsAttribute("form")) {
+            model.addAttribute("form", new PublicarCursoFormDTO());
+        }
         return "cursos/publicar";
     }
 
     /**
-     * POST /mvc/cursos/{id}/publicar — publica el curso con las mismas 7
-     * reglas que valida {@link CursoService#publicarCurso}. El administrador
-     * que autoriza se resuelve de la sesión, nunca de un campo del formulario.
+     * POST /mvc/cursos/{id}/publicar — valida los datos del formulario con Bean Validation
+     * ({@code @Valid} y {@link BindingResult}) y publica el curso con las reglas de negocio
+     * de {@link CursoService#publicarCurso}. El administrador que autoriza se resuelve
+     * de la sesión, nunca de un campo del formulario.
      *
-     * <p>Post/Redirect/Get: éxito → redirige al catálogo; error de regla de
-     * negocio → re-renderiza el mismo formulario con el mensaje (no es un
-     * reenvío de POST, es la primera respuesta a ese POST en particular).
+     * <p>Post/Redirect/Get: éxito → redirige al catálogo; error de validación de campo
+     * o regla de negocio → re-renderiza el mismo formulario con los mensajes correspondientes.
      */
     @PostMapping("/{id}/publicar")
-    String publicar(@PathVariable Long id, Authentication auth, Model model,
+    String publicar(@PathVariable Long id,
+                    @Valid @ModelAttribute("form") PublicarCursoFormDTO form,
+                    BindingResult errores,
+                    Authentication auth,
+                    Model model,
                     RedirectAttributes redirect) {
+
+        if (errores.hasErrors()) {
+            model.addAttribute("curso", cursoService.obtenerPorId(id));
+            return "cursos/publicar";
+        }
+
         try {
             Long administradorId = usuarioService.obtenerPorCorreo(auth.getName()).id();
             cursoService.publicarCurso(id, new PublicarCursoRequestDTO(administradorId));

@@ -161,6 +161,7 @@ public class SecurityConfig {
                     log.warn("Evento de seguridad: petición no autenticada (401) en ruta '{}' [{}]",
                             req.getRequestURI(), req.getMethod());
                     res.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    res.setCharacterEncoding("UTF-8");
                     res.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
                     ProblemDetail pd = problemDetail(
                             HttpStatus.UNAUTHORIZED,
@@ -175,6 +176,7 @@ public class SecurityConfig {
                     log.warn("Evento de seguridad: acceso denegado (403) para usuario '{}' en ruta '{}' [{}]",
                             principal, req.getRequestURI(), req.getMethod());
                     res.setStatus(HttpStatus.FORBIDDEN.value());
+                    res.setCharacterEncoding("UTF-8");
                     res.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
                     ProblemDetail pd = problemDetail(
                             HttpStatus.FORBIDDEN,
