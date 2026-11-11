@@ -747,12 +747,9 @@ Thymeleaf + Spring Security en el classpath). Si se omite `th:action` por
 un `action="..."` plano, el campo no se inyecta y el `POST` responde 403 —
 por eso todos los formularios del módulo usan la sintaxis de Thymeleaf.
 
-Formulario validado: `POST /mvc/matriculas/nueva` usa Bean Validation sobre
-[`NuevaMatriculaFormDTO`](src/main/java/cr/ac/una/lab1/presentation/NuevaMatriculaFormDTO.java)
-(`@NotNull` en lección y método de pago); los errores de campo se muestran
-inline con `th:errors`, y las reglas de negocio que fallan en el servicio
-(p. ej. cupo lleno, matrícula duplicada) se muestran igual sin perder lo
-que el usuario ya llenó en el formulario.
+Formularios validados con Bean Validation y BindingResult:
+- **Nueva matrícula** (`POST /mvc/matriculas/nueva`): usa Bean Validation sobre [`NuevaMatriculaFormDTO`](src/main/java/cr/ac/una/lab1/presentation/NuevaMatriculaFormDTO.java) (`@NotNull` en lección y método de pago); los errores de campo se muestran inline con `th:errors`, y las reglas de negocio que fallan en el servicio se muestran igual sin perder lo que el usuario ya llenó.
+- **Publicar curso** (`POST /mvc/cursos/{id}/publicar`): respaldado por [`PublicarCursoFormDTO`](src/main/java/cr/ac/una/lab1/presentation/PublicarCursoFormDTO.java) con Bean Validation (`@NotNull` en fecha de publicación, `@NotBlank`/`@Size` en justificación, y `@AssertTrue` en confirmación de requisitos); si la validación falla, `BindingResult` re-renderiza el formulario con mensajes inline; si pasa, `CursoService` evalúa las 7 reglas de negocio del dominio.
 
 ### Probarlo localmente
 
